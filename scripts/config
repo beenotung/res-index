@@ -1,0 +1,4 @@
+user=node
+host=res-index.cc
+root_dir=/home/node/workspace/github.com/beenotung/res-index
+pm2_name="res-index"
