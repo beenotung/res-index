@@ -4,7 +4,7 @@ A searchable index for development resources, including github repo and npm pack
 
 ## Why yet another index?
 
-In short, the search on google and github are unsatisfied.
+**In short, the search functionality on google and github are unsatisfied. This project aim to build a better alternative and potentially improve google's search result.**
 
 Sometime I want to search for a npm package but google cannot return that result even after I added "npm", "github", or even the combination of exact author username and package name.
 
