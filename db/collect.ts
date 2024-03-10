@@ -11,6 +11,7 @@ async function main() {
     page,
     'https://github.com/beenotung?tab=repositories',
   )
+  await collectNpmPackages(page, 'beenotung', 0)
   await page.close()
   await browser.close()
   console.log('collect done.')
@@ -141,6 +142,38 @@ async function collectGithubRepositories(page: GracefulPage, indexUrl: string) {
   })()
   if (res.nextUrl) {
     await collectGithubRepositories(page, res.nextUrl)
+  }
+}
+
+async function collectNpmPackages(
+  page: GracefulPage,
+  scope: string,
+  /** @description starts at zero */
+  pageNum: number,
+) {
+  let perPage = 100
+  let indexUrl = `https://www.npmjs.com/settings/${scope}/packages?page=${pageNum}&perPage=${perPage}`
+  await page.goto(indexUrl)
+  let packages = await page.evaluate(() => {
+    return Array.from(
+      document.body.querySelectorAll<HTMLAnchorElement>(
+        'li section a[href*="/package/"]',
+      ),
+      a => {
+        let url = a.href
+        let section = a.closest('section')
+        if (!section) {
+          throw new Error('failed to find package section')
+        }
+        let desc = section.querySelector('p.lh-copy')?.textContent?.trim()
+        return { url, desc }
+      },
+    )
+  })
+  // TODO store into DB
+  // TODO go to detail page, collect repository url, homepage, weekly downloads, version, last publish, unpacked size, total files
+  if (packages.length === perPage) {
+    await collectNpmPackages(page, scope, pageNum + 1)
   }
 }
 
