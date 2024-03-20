@@ -7,17 +7,22 @@ import { db } from './db'
 async function main() {
   let browser = await chromium.launch({ headless: false })
   let page = new GracefulPage({ from: browser })
-  await collectGithubRepositories(
-    page,
-    'https://github.com/beenotung?tab=repositories',
-  )
+  await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
   await collectNpmPackages(page, 'beenotung', 0)
   await page.close()
   await browser.close()
   console.log('collect done.')
 }
 
-async function collectGithubRepositories(page: GracefulPage, indexUrl: string) {
+async function collectGithubRepositories(
+  page: GracefulPage,
+  options: {
+    username: string
+    /** @description starts at 1 */
+    page: number
+  },
+) {
+  let indexUrl = `https://github.com/${options.username}?page=${options.page}&tab=repositories`
   await page.goto(indexUrl)
   let res = await page.evaluate(() => {
     let repos = Array.from(
@@ -141,7 +146,10 @@ async function collectGithubRepositories(page: GracefulPage, indexUrl: string) {
     }
   })()
   if (res.nextUrl) {
-    await collectGithubRepositories(page, res.nextUrl)
+    await collectGithubRepositories(page, {
+      username: options.username,
+      page: options.page + 1,
+    })
   }
 }
 
