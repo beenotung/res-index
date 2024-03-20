@@ -67,6 +67,7 @@ async function collectGithubRepositories(
   let indexPayload = JSON.stringify(res)
   let now = Date.now()
   db.transaction(() => {
+    /* index page */
     let indexPage = find(proxy.page, { url: indexUrl })
     if (!indexPage) {
       proxy.page.push({
@@ -84,6 +85,7 @@ async function collectGithubRepositories(
         storeRepos()
       }
     }
+
     function storeRepos() {
       for (let repoData of res.repos) {
         /* repo page */
