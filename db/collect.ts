@@ -5,12 +5,16 @@ import { NpmPackage, proxy } from './proxy'
 import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
 import { array, date, dict, int, object, optional, string } from 'cast.ts'
+import { writeFileSync } from 'fs'
 
 async function main() {
   let browser = await chromium.launch({ headless: false })
   let page = new GracefulPage({ from: browser })
-  await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
-  await collectNpmPackages(page, { scope: 'beenotung' })
+  // await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
+  // await collectNpmPackages(page, { scope: 'beenotung' })
+  for (let npm_package of filter(proxy.npm_package, { last_publish: null })) {
+    await collectNpmPackageDetail(npm_package)
+  }
   await page.close()
   await browser.close()
   console.log('collect done.')
@@ -252,7 +256,7 @@ async function collectNpmPackages(
             last_publish: null,
             weekly_downloads: null,
             unpacked_size: null,
-            total_files: null,
+            file_count: null,
             repository: null,
             repo_id: null,
             homepage: null,
@@ -299,7 +303,7 @@ let npmPackageDetailParser = object({
         }),
       ),
       dist: object({
-        fileCount: int({ min: 1 }),
+        fileCount: int({ min: 1 }), // FIXME this is optional
         unpackedSize: int({ min: 1 }),
       }),
     }),
@@ -317,8 +321,10 @@ let npmPackageDetailParser = object({
 })
 
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
-  let res = await fetch(npm_package.page!.url)
+  let url = npm_package.page!.url
+  let res = await fetch(url)
   let payload = await res.text()
+  writeFileSync('npm.json', payload)
   let pkg = npmPackageDetailParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
@@ -346,10 +352,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       npm_package.unpacked_size = versionDetail.dist.unpackedSize
     if (npm_package.file_count != versionDetail.dist.fileCount)
       npm_package.file_count = versionDetail.dist.fileCount
-    let repository = pkg.repository.url
-    npm_package.repository = pkg.repository.url
-    npm_package.repo_id = '?'
-    npm_package.homepage = '?'
+    let repository_url = pkg.repository.url.replace('git+https://', 'https://')
+    npm_package.repository = repository_url
+    npm_package.repo_id = find(proxy.repo, { url: repository_url })?.id || null
+    npm_package.homepage = pkg.homepage
   })()
 }
 
