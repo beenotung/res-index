@@ -3,12 +3,13 @@ import { GracefulPage } from 'graceful-playwright'
 import { chromium } from 'playwright'
 import { proxy } from './proxy'
 import { db } from './db'
+import { later } from '@beenotung/tslib/async/wait'
 
 async function main() {
   let browser = await chromium.launch({ headless: false })
   let page = new GracefulPage({ from: browser })
   await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
-  await collectNpmPackages(page, 'beenotung', 0)
+  await collectNpmPackages(page, { scope: 'beenotung' })
   await page.close()
   await browser.close()
   console.log('collect done.')
@@ -157,34 +158,114 @@ async function collectGithubRepositories(
 
 async function collectNpmPackages(
   page: GracefulPage,
-  scope: string,
-  /** @description starts at zero */
-  pageNum: number,
+  options: { scope: string },
 ) {
-  let perPage = 100
-  let indexUrl = `https://www.npmjs.com/settings/${scope}/packages?page=${pageNum}&perPage=${perPage}`
+  let indexUrl = `https://www.npmjs.com/~${options.scope}`
   await page.goto(indexUrl)
-  let packages = await page.evaluate(() => {
-    return Array.from(
+  for (;;) {
+    let res = await page.evaluate(() => {
+      let links =
+        document.querySelectorAll<HTMLAnchorElement>('a[href*="?page="]')
+      for (let link of links) {
+        if (link.innerText == 'show more packages') {
+          link.click()
+          return 'loading' as const
+        }
+        if (link.innerText == 'loading') {
+          return 'loading' as const
+        }
+      }
+    })
+    if (res == 'loading') {
+      await later(500)
+      continue
+    }
+    break
+  }
+  let res = await page.evaluate(() => {
+    let packages = Array.from(
       document.body.querySelectorAll<HTMLAnchorElement>(
         'li section a[href*="/package/"]',
       ),
       a => {
         let url = a.href
+        let name = url.match(/\/package\/(.*)/)?.[1]
+        if (!name) {
+          throw new Error('failed to parse package name, url: ' + url)
+        }
         let section = a.closest('section')
         if (!section) {
           throw new Error('failed to find package section')
         }
-        let desc = section.querySelector('p.lh-copy')?.textContent?.trim()
-        return { url, desc }
+        let desc =
+          section.querySelector('p.lh-copy')?.textContent?.trim() || null
+        return { url, name, desc }
       },
     )
+    return { packages }
   })
-  // TODO store into DB
-  // TODO go to detail page, collect repository url, homepage, weekly downloads, version, last publish, unpacked size, total files
-  if (packages.length === perPage) {
-    await collectNpmPackages(page, scope, pageNum + 1)
-  }
+
+  let indexPayload = JSON.stringify(res)
+  let now = Date.now()
+  db.transaction(() => {
+    /* index page */
+    let indexPage = find(proxy.page, { url: indexUrl })
+    if (!indexPage) {
+      proxy.page.push({
+        url: indexUrl,
+        payload: indexPayload,
+        check_time: now,
+        update_time: now,
+      })
+      storePackages()
+    } else {
+      indexPage.check_time = now
+      if (indexPage.payload != indexPayload) {
+        indexPage.payload = indexPayload
+        indexPage.update_time = now
+        storePackages()
+      }
+    }
+    function storePackages() {
+      for (let pkg of res.packages) {
+        /* npm package page */
+        let pkgPage = find(proxy.page, { url: pkg.url })
+        if (!pkgPage) {
+          let id = proxy.page.push({
+            url: pkg.url,
+            payload: null,
+            check_time: null,
+            update_time: null,
+          })
+          pkgPage = proxy.page[id]
+        }
+
+        /* npm package */
+        let name = pkg.url
+        let npm_package = find(proxy.npm_package, { name: pkg.name })
+        if (!npm_package) {
+          let id = proxy.npm_package.push({
+            name: pkg.name,
+            version: null,
+            desc: pkg.desc,
+            last_publish: null,
+            weekly_downloads: null,
+            unpacked_size: null,
+            total_files: null,
+            repository: null,
+            repo_id: null,
+            homepage: null,
+            page_id: pkgPage.id!,
+          })
+          npm_package = proxy.npm_package[id]
+        } else {
+          if (npm_package.desc != pkg.desc) npm_package.desc = pkg.desc
+        }
+        /* TODO npm package keywords */
+        /* TODO npm package dependencies */
+      }
+    }
+  })()
 }
 
 main().catch(e => console.error(e))

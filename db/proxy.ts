@@ -125,6 +125,41 @@ export type RepoTag = {
   tag?: Tag
 }
 
+export type NpmPackage = {
+  id?: null | number
+  name: string
+  version: null | string
+  desc: null | string
+  last_publish: null | number
+  weekly_downloads: null | number
+  unpacked_size: null | string
+  total_files: null | number
+  repository: null | string
+  repo_id: null | number
+  repo?: Repo
+  homepage: null | string
+  page_id: number
+  page?: Page
+}
+
+export type NpmPackageKeyword = {
+  id?: null | number
+  tag_id: number
+  tag?: Tag
+  npm_package_id: number
+  npm_package?: NpmPackage
+}
+
+export type NpmPackageDependency = {
+  id?: null | number
+  package_id: number
+  package?: NpmPackage
+  name: string
+  dependency_id: null | number
+  dependency?: NpmPackage
+  type: ('prod' | 'dev' | 'peer')
+}
+
 export type DBProxy = {
   method: Method[]
   url: Url[]
@@ -142,6 +177,9 @@ export type DBProxy = {
   repo: Repo[]
   tag: Tag[]
   repo_tag: RepoTag[]
+  npm_package: NpmPackage[]
+  npm_package_keyword: NpmPackageKeyword[]
+  npm_package_dependency: NpmPackageDependency[]
 }
 
 export let proxy = proxySchema<DBProxy>({
@@ -185,6 +223,21 @@ export let proxy = proxySchema<DBProxy>({
       /* foreign references */
       ['repo', { field: 'repo_id', table: 'repo' }],
       ['tag', { field: 'tag_id', table: 'tag' }],
+    ],
+    npm_package: [
+      /* foreign references */
+      ['repo', { field: 'repo_id', table: 'repo' }],
+      ['page', { field: 'page_id', table: 'page' }],
+    ],
+    npm_package_keyword: [
+      /* foreign references */
+      ['tag', { field: 'tag_id', table: 'tag' }],
+      ['npm_package', { field: 'npm_package_id', table: 'npm_package' }],
+    ],
+    npm_package_dependency: [
+      /* foreign references */
+      ['package', { field: 'package_id', table: 'npm_package' }],
+      ['dependency', { field: 'dependency_id', table: 'npm_package' }],
     ],
   },
 })
