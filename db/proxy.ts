@@ -132,8 +132,8 @@ export type NpmPackage = {
   desc: null | string
   last_publish: null | number
   weekly_downloads: null | number
-  unpacked_size: null | string
-  total_files: null | number
+  unpacked_size: null | number
+  file_count: null | number
   repository: null | string
   repo_id: null | number
   repo?: Repo
@@ -157,7 +157,7 @@ export type NpmPackageDependency = {
   name: string
   dependency_id: null | number
   dependency?: NpmPackage
-  type: ('prod' | 'dev' | 'peer')
+  type: ('prod' | 'dev' | 'peer' | 'optional')
 }
 
 export type DBProxy = {

@@ -150,8 +150,8 @@ version text NULL
 desc text NULL
 last_publish integer NULL
 weekly_downloads integer NULL
-unpacked_size text NULL
-total_files integer NULL
+unpacked_size integer NULL
+file_count integer NULL
 repository text NULL
 repo_id integer NULL FK >0- repo.id
 homepage text NULL
@@ -171,7 +171,7 @@ id integer PK
 package_id integer FK >0- npm_package.id
 name text
 dependency_id integer NULL FK >0- npm_package.id
-type enum('prod','dev','peer')
+type enum('prod','dev','peer','optional')
 
 
 # zoom: 1.000
@@ -198,6 +198,6 @@ type enum('prod','dev','peer')
 # repo (77, 1034)
 # tag (1131, 969)
 # repo_tag (655, 991)
-# npm_package (560, 1240)
+# npm_package (560, 1239)
 # npm_package_keyword (1016, 1221)
 # npm_package_dependency (972, 1437)

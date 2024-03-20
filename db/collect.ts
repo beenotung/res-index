@@ -1,9 +1,10 @@
 import { filter, find, seedRow } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
 import { chromium } from 'playwright'
-import { proxy } from './proxy'
+import { NpmPackage, proxy } from './proxy'
 import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
+import { array, date, dict, int, object, optional, string } from 'cast.ts'
 
 async function main() {
   let browser = await chromium.launch({ headless: false })
@@ -199,7 +200,7 @@ async function collectNpmPackages(
         }
         let desc =
           section.querySelector('p.lh-copy')?.textContent?.trim() || null
-        return { url, name, desc }
+        return { name, desc }
       },
     )
     return { packages }
@@ -229,10 +230,11 @@ async function collectNpmPackages(
     function storePackages() {
       for (let pkg of res.packages) {
         /* npm package page */
-        let pkgPage = find(proxy.page, { url: pkg.url })
+        let pkgUrl = `https://registry.npmjs.org/${pkg.name}`
+        let pkgPage = find(proxy.page, { url: pkgUrl })
         if (!pkgPage) {
           let id = proxy.page.push({
-            url: pkg.url,
+            url: pkgUrl,
             payload: null,
             check_time: null,
             update_time: null,
@@ -241,7 +243,6 @@ async function collectNpmPackages(
         }
 
         /* npm package */
-        let name = pkg.url
         let npm_package = find(proxy.npm_package, { name: pkg.name })
         if (!npm_package) {
           let id = proxy.npm_package.push({
@@ -265,6 +266,90 @@ async function collectNpmPackages(
         /* TODO npm package dependencies */
       }
     }
+  })()
+}
+
+let npmPackageDetailParser = object({
+  name: string(),
+  versions: dict({
+    key: string({ sampleValue: '0.0.1' }),
+    value: object({
+      dependencies: optional(
+        dict({
+          key: string({ sampleValue: 'better-sqlite3' }),
+          value: string({ sampleValue: '^7.1.0' }),
+        }),
+      ),
+      devDependencies: optional(
+        dict({
+          key: string({ sampleValue: 'better-sqlite3' }),
+          value: string({ sampleValue: '^7.1.0' }),
+        }),
+      ),
+      peerDependencies: optional(
+        dict({
+          key: string({ sampleValue: 'better-sqlite3' }),
+          value: string({ sampleValue: '^7.1.0' }),
+        }),
+      ),
+      optionalDependencies: optional(
+        dict({
+          key: string({ sampleValue: 'better-sqlite3' }),
+          value: string({ sampleValue: '^7.1.0' }),
+        }),
+      ),
+      dist: object({
+        fileCount: int({ min: 1 }),
+        unpackedSize: int({ min: 1 }),
+      }),
+    }),
+  }),
+  time: dict({ key: string(), value: date() }),
+  description: string(),
+  homepage: string(),
+  keywords: array(string()),
+  repository: object({
+    type: string({ sampleValue: 'git' }),
+    url: string({
+      sampleValue: 'git+https://github.com/beenotung/better-sqlite3-schema.git',
+    }),
+  }),
+})
+
+async function collectNpmPackageDetail(npm_package: NpmPackage) {
+  let res = await fetch(npm_package.page!.url)
+  let payload = await res.text()
+  let pkg = npmPackageDetailParser.parse(JSON.parse(payload))
+  let now = Date.now()
+  db.transaction(() => {
+    let page = npm_package.page!
+    page.check_time = now
+    if (page.payload == payload) return
+    page.payload = payload
+    page.update_time = now
+    let { version, publish_time } = Object.entries(pkg.time)
+      .map(([version, date]) => ({
+        version,
+        publish_time: date.getTime(),
+      }))
+      .sort((a, b) => b.publish_time - a.publish_time)[0]
+    if (npm_package.version != version) version
+    if (npm_package.last_publish != publish_time) publish_time
+    // TODO collect weekly download from another API
+    // npm_package.weekly_downloads = '?'
+    let versionDetail = pkg.versions[version]
+    if (!versionDetail)
+      throw new Error(
+        `failed to find npm package version detail, name: ${npm_package.name}, version: ${version}`,
+      )
+    if (npm_package.unpacked_size != versionDetail.dist.unpackedSize)
+      npm_package.unpacked_size = versionDetail.dist.unpackedSize
+    if (npm_package.file_count != versionDetail.dist.fileCount)
+      npm_package.file_count = versionDetail.dist.fileCount
+    let repository = pkg.repository.url
+    npm_package.repository = pkg.repository.url
+    npm_package.repo_id = '?'
+    npm_package.homepage = '?'
   })()
 }
 

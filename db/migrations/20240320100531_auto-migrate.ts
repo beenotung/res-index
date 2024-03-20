@@ -4,22 +4,16 @@ import { Knex } from 'knex'
 export async function up(knex: Knex): Promise<void> {
   await knex.raw('alter table `npm_package` drop column `pull_requests`')
   await knex.raw('alter table `npm_package` drop column `issues`')
+  await knex.raw('alter table `npm_package` drop column `total_files`')
   {
-    const rows = await knex.select('id', 'version').from('npm_package')
-    await knex.raw('alter table `npm_package` drop column `version`')
-    await knex.raw("alter table `npm_package` add column `version` text null")
+    const rows = await knex.select('id', 'unpacked_size').from('npm_package')
+    await knex.raw('alter table `npm_package` drop column `unpacked_size`')
+    await knex.raw("alter table `npm_package` add column `unpacked_size` integer null")
     for (let row of rows) {
-      await knex('npm_package').update({ version: row.version }).where({ id: row.id })
+      await knex('npm_package').update({ unpacked_size: row.unpacked_size }).where({ id: row.id })
     }
   }
-  {
-    const rows = await knex.select('id', 'homepage').from('npm_package')
-    await knex.raw('alter table `npm_package` drop column `homepage`')
-    await knex.raw("alter table `npm_package` add column `homepage` text null")
-    for (let row of rows) {
-      await knex('npm_package').update({ homepage: row.homepage }).where({ id: row.id })
-    }
-  }
+  await knex.raw('alter table `npm_package` add column `file_count` integer null')
 
   if (!(await knex.schema.hasTable('npm_package_keyword'))) {
     await knex.schema.createTable('npm_package_keyword', table => {
@@ -36,7 +30,7 @@ export async function up(knex: Knex): Promise<void> {
       table.integer('package_id').unsigned().notNullable().references('npm_package.id')
       table.text('name').notNullable()
       table.integer('dependency_id').unsigned().nullable().references('npm_package.id')
-      table.enum('type', ['prod', 'dev', 'peer']).notNullable()
+      table.enum('type', ['prod', 'dev', 'peer', 'optional']).notNullable()
       table.timestamps(false, true)
     })
   }
@@ -46,10 +40,16 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('npm_package_dependency')
   await knex.schema.dropTableIfExists('npm_package_keyword')
-  // FIXME: alter column (npm_package.homepage) to be non-nullable not supported in sqlite
-  // you may set it to be non-nullable with sqlite browser manually
-  // FIXME: alter column (npm_package.version) to be non-nullable not supported in sqlite
-  // you may set it to be non-nullable with sqlite browser manually
+  await knex.raw('alter table `npm_package` drop column `file_count`')
+  {
+    const rows = await knex.select('id', 'unpacked_size').from('npm_package')
+    await knex.raw('alter table `npm_package` drop column `unpacked_size`')
+    await knex.raw("alter table `npm_package` add column `unpacked_size` text null")
+    for (let row of rows) {
+      await knex('npm_package').update({ unpacked_size: row.unpacked_size }).where({ id: row.id })
+    }
+  }
+  await knex.raw('alter table `npm_package` add column `total_files` integer null')
   await knex.raw('alter table `npm_package` add column `issues` integer null')
   await knex.raw('alter table `npm_package` add column `pull_requests` integer null')
 }
