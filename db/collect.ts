@@ -1,7 +1,7 @@
-import { filter, find, seedRow } from 'better-sqlite3-proxy'
+import { del, filter, find, seedRow } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
 import { chromium } from 'playwright'
-import { NpmPackage, proxy } from './proxy'
+import { NpmPackage, proxy, NpmPackageDependency } from './proxy'
 import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
 import { array, date, dict, int, object, optional, string } from 'cast.ts'
@@ -139,16 +139,16 @@ async function collectGithubRepositories(
         let repo_id = repo.id!
 
         /* repo tags */
-        for (let row of filter(proxy.repo_tag, { repo_id })) {
-          if (!repoData.tags.includes(row.tag!.name)) {
-            delete proxy.repo_tag[row.id!]
+        for (let row of filter(proxy.repo_keyword, { repo_id })) {
+          if (!repoData.tags.includes(row.keyword!.name)) {
+            delete proxy.repo_keyword[row.id!]
           }
         }
-        for (let tag of repoData.tags) {
-          let tag_id =
-            find(proxy.tag, { name: tag })?.id || proxy.tag.push({ name: tag })
-          find(proxy.repo_tag, { repo_id, tag_id }) ||
-            proxy.repo_tag.push({ repo_id, tag_id })
+        for (let name of repoData.tags) {
+          let keyword_id =
+            find(proxy.keyword, { name })?.id || proxy.keyword.push({ name })
+          find(proxy.repo_keyword, { repo_id, keyword_id }) ||
+            proxy.repo_keyword.push({ repo_id, keyword_id })
         }
       }
     }
@@ -233,44 +233,62 @@ async function collectNpmPackages(
     }
     function storePackages() {
       for (let pkg of res.packages) {
-        /* npm package page */
-        let pkgUrl = `https://registry.npmjs.org/${pkg.name}`
-        let pkgPage = find(proxy.page, { url: pkgUrl })
-        if (!pkgPage) {
-          let id = proxy.page.push({
-            url: pkgUrl,
-            payload: null,
-            check_time: null,
-            update_time: null,
-          })
-          pkgPage = proxy.page[id]
-        }
-
-        /* npm package */
-        let npm_package = find(proxy.npm_package, { name: pkg.name })
-        if (!npm_package) {
-          let id = proxy.npm_package.push({
-            name: pkg.name,
-            version: null,
-            desc: pkg.desc,
-            last_publish: null,
-            weekly_downloads: null,
-            unpacked_size: null,
-            file_count: null,
-            repository: null,
-            repo_id: null,
-            homepage: null,
-            page_id: pkgPage.id!,
-          })
-          npm_package = proxy.npm_package[id]
-        } else {
-          if (npm_package.desc != pkg.desc) npm_package.desc = pkg.desc
-        }
-        /* TODO npm package keywords */
-        /* TODO npm package dependencies */
+        let npm_package = storeNpmPackage(pkg)
+        if (npm_package.desc != pkg.desc) npm_package.desc = pkg.desc
       }
     }
   })()
+}
+
+function storeNpmPackage(pkg: { name: string }) {
+  /* npm package page */
+  let pkgUrl = `https://registry.npmjs.org/${pkg.name}`
+  let pkgPage = find(proxy.page, { url: pkgUrl })
+  if (!pkgPage) {
+    let id = proxy.page.push({
+      url: pkgUrl,
+      payload: null,
+      check_time: null,
+      update_time: null,
+    })
+    pkgPage = proxy.page[id]
+  }
+
+  /* download trend page */
+  let downloadUrl = `https://api.npmjs.org/downloads/point/last-day/${pkg.name}`
+  let downloadPage = find(proxy.page, { url: downloadUrl })
+  if (!downloadPage) {
+    let id = proxy.page.push({
+      url: downloadUrl,
+      payload: null,
+      check_time: null,
+      update_time: null,
+    })
+    downloadPage = proxy.page[id]
+  }
+
+  /* npm package */
+  let npm_package = find(proxy.npm_package, { name: pkg.name })
+  if (!npm_package) {
+    let id = proxy.npm_package.push({
+      name: pkg.name,
+      version: null,
+      desc: null,
+      create_time: null,
+      last_publish: null,
+      weekly_downloads: null,
+      unpacked_size: null,
+      file_count: null,
+      repository: null,
+      repo_id: null,
+      homepage: null,
+      page_id: pkgPage.id!,
+      download_page_id: downloadPage.id!,
+    })
+    npm_package = proxy.npm_package[id]
+  }
+
+  return npm_package
 }
 
 let npmPackageDetailParser = object({
@@ -303,8 +321,8 @@ let npmPackageDetailParser = object({
         }),
       ),
       dist: object({
-        fileCount: int({ min: 1 }), // FIXME this is optional
-        unpackedSize: int({ min: 1 }),
+        fileCount: optional(int({ min: 1 })),
+        unpackedSize: optional(int({ min: 1 })),
       }),
     }),
   }),
@@ -319,44 +337,149 @@ let npmPackageDetailParser = object({
     }),
   }),
 })
+let packageTimeParser = object({
+  modified: optional(date()),
+  created: optional(date()),
+})
 
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let url = npm_package.page!.url
   let res = await fetch(url)
   let payload = await res.text()
-  writeFileSync('npm.json', payload)
   let pkg = npmPackageDetailParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
+    /* npm package page */
     let page = npm_package.page!
     page.check_time = now
     if (page.payload == payload) return
     page.payload = payload
     page.update_time = now
-    let { version, publish_time } = Object.entries(pkg.time)
+
+    /* npm package */
+    let timeList = Object.entries(pkg.time)
       .map(([version, date]) => ({
         version,
         publish_time: date.getTime(),
       }))
-      .sort((a, b) => b.publish_time - a.publish_time)[0]
+      .sort((a, b) => b.publish_time - a.publish_time)
+    let { version, publish_time } = timeList[0]
+    console.log('timeList:', timeList)
+
+    let packageTime = packageTimeParser.parse(pkg.time)
+    let create_time = packageTime.created?.getTime() || null
+    let modified_time = packageTime.modified?.getTime() || null
+
+    if (npm_package.create_time != create_time)
+      npm_package.create_time = create_time
+
+    if (npm_package.last_publish != modified_time)
+      npm_package.last_publish ||= modified_time
+
     if (npm_package.version != version) version
+
     if (npm_package.last_publish != publish_time) publish_time
+
     // TODO collect weekly download from another API
     // npm_package.weekly_downloads = '?'
+
     let versionDetail = pkg.versions[version]
     if (!versionDetail)
       throw new Error(
         `failed to find npm package version detail, name: ${npm_package.name}, version: ${version}`,
       )
-    if (npm_package.unpacked_size != versionDetail.dist.unpackedSize)
-      npm_package.unpacked_size = versionDetail.dist.unpackedSize
-    if (npm_package.file_count != versionDetail.dist.fileCount)
-      npm_package.file_count = versionDetail.dist.fileCount
+
+    function findUnpackedSize() {
+      for (let time of timeList) {
+        let version = pkg.versions[time.version]
+        if (version?.dist.unpackedSize) {
+          return version.dist.unpackedSize
+        }
+      }
+      return null
+    }
+    let unpacked_size = findUnpackedSize()
+    if (npm_package.unpacked_size != unpacked_size)
+      npm_package.unpacked_size = unpacked_size
+
+    function findFileCount() {
+      for (let time of timeList) {
+        let version = pkg.versions[time.version]
+        if (version?.dist.fileCount) {
+          return version.dist.fileCount
+        }
+      }
+      return null
+    }
+    let file_count = findFileCount()
+    if (npm_package.file_count != file_count)
+      npm_package.file_count = file_count
+
     let repository_url = pkg.repository.url.replace('git+https://', 'https://')
     npm_package.repository = repository_url
-    npm_package.repo_id = find(proxy.repo, { url: repository_url })?.id || null
-    npm_package.homepage = pkg.homepage
+
+    if (!npm_package.repo_id) {
+      let repo = find(proxy.repo, { url: repository_url })
+      if (repo) {
+        npm_package.repo_id = repo.id!
+      }
+    }
+
+    if (npm_package.homepage != pkg.homepage)
+      npm_package.homepage = pkg.homepage
+
+    let npm_package_id = npm_package.id!
+
+    /* npm package keywords */
+    for (let row of filter(proxy.npm_package_keyword, { npm_package_id })) {
+      if (!pkg.keywords.includes(row.keyword!.name)) {
+        delete proxy.npm_package_keyword[row.id!]
+      }
+    }
+    for (let name of pkg.keywords) {
+      let keyword_id =
+        find(proxy.keyword, { name })?.id || proxy.keyword.push({ name })
+      find(proxy.npm_package_keyword, { npm_package_id, keyword_id }) ||
+        proxy.npm_package_keyword.push({ npm_package_id, keyword_id })
+    }
+
+    /* dependencies */
+    storeDeps('prod', versionDetail.dependencies)
+    storeDeps('dev', versionDetail.devDependencies)
+    storeDeps('peer', versionDetail.peerDependencies)
+    storeDeps('optional', versionDetail.optionalDependencies)
+    function storeDeps(
+      type: NpmPackageDependency['type'],
+      deps: undefined | Record<string, string>,
+    ) {
+      if (!deps) {
+        del(proxy.npm_package_dependency, {
+          package_id: npm_package_id,
+          type,
+        })
+        return
+      }
+      let names = Object.keys(deps)
+      for (let row of filter(proxy.npm_package_dependency, {
+        package_id: npm_package_id,
+        type,
+      })) {
+        if (!names.includes(row.dependency!.name)) {
+          delete proxy.npm_package_dependency[row.id!]
+        }
+      }
+      for (let name of names) {
+        let dep_package = storeNpmPackage({ name })
+        proxy.npm_package_dependency.push({
+          package_id: npm_package_id,
+          dependency_id: dep_package.id!,
+          type,
+        })
+      }
+    }
   })()
 }
+
+async function collectNpmPackageDownloads(npm_package: NpmPackage) {}
 
 main().catch(e => console.error(e))

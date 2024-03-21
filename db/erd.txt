@@ -129,17 +129,17 @@ website text NULL
 page_id integer FK >0- page.id
 
 
-tag
----
+keyword
+-------
 id integer PK
 name text unique
 
 
-repo_tag
---------
+repo_keyword
+------------
 id integer PK
 repo_id integer FK >0- repo.id
-tag_id integer FK >0- tag.id
+keyword_id integer FK >0- keyword.id
 
 
 npm_package
@@ -148,6 +148,7 @@ id integer PK
 name text
 version text NULL
 desc text NULL
+create_time integer NULL
 last_publish integer NULL
 weekly_downloads integer NULL
 unpacked_size integer NULL
@@ -156,12 +157,13 @@ repository text NULL
 repo_id integer NULL FK >0- repo.id
 homepage text NULL
 page_id integer FK >0- page.id
+download_page_id integer FK >0- page.id
 
 
 npm_package_keyword
 -------------------
 id integer PK
-tag_id integer FK >0- tag.id
+keyword_id integer FK >0- keyword.id
 npm_package_id integer FK >0- npm_package.id
 
 
@@ -169,13 +171,12 @@ npm_package_dependency
 ----------------------
 id integer PK
 package_id integer FK >0- npm_package.id
-name text
-dependency_id integer NULL FK >0- npm_package.id
+dependency_id integer FK >0- npm_package.id
 type enum('prod','dev','peer','optional')
 
 
 # zoom: 1.000
-# view: (-87, 677)
+# view: (445, 891)
 # text-bg: #6495ed
 # text-color: #000000
 # diagram-bg: #f5f5f5
@@ -196,8 +197,8 @@ type enum('prod','dev','peer','optional')
 # page (89, 1329)
 # programming_language (75, 871)
 # repo (77, 1034)
-# tag (1131, 969)
-# repo_tag (655, 991)
-# npm_package (560, 1239)
+# keyword (1131, 969)
+# repo_keyword (655, 991)
+# npm_package (560, 1238)
 # npm_package_keyword (1016, 1221)
 # npm_package_dependency (972, 1437)

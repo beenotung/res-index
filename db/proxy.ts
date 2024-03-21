@@ -112,17 +112,17 @@ export type Repo = {
   page?: Page
 }
 
-export type Tag = {
+export type Keyword = {
   id?: null | number
   name: string
 }
 
-export type RepoTag = {
+export type RepoKeyword = {
   id?: null | number
   repo_id: number
   repo?: Repo
-  tag_id: number
-  tag?: Tag
+  keyword_id: number
+  keyword?: Keyword
 }
 
 export type NpmPackage = {
@@ -130,6 +130,7 @@ export type NpmPackage = {
   name: string
   version: null | string
   desc: null | string
+  create_time: null | number
   last_publish: null | number
   weekly_downloads: null | number
   unpacked_size: null | number
@@ -140,12 +141,14 @@ export type NpmPackage = {
   homepage: null | string
   page_id: number
   page?: Page
+  download_page_id: number
+  download_page?: Page
 }
 
 export type NpmPackageKeyword = {
   id?: null | number
-  tag_id: number
-  tag?: Tag
+  keyword_id: number
+  keyword?: Keyword
   npm_package_id: number
   npm_package?: NpmPackage
 }
@@ -154,8 +157,7 @@ export type NpmPackageDependency = {
   id?: null | number
   package_id: number
   package?: NpmPackage
-  name: string
-  dependency_id: null | number
+  dependency_id: number
   dependency?: NpmPackage
   type: ('prod' | 'dev' | 'peer' | 'optional')
 }
@@ -175,8 +177,8 @@ export type DBProxy = {
   page: Page[]
   programming_language: ProgrammingLanguage[]
   repo: Repo[]
-  tag: Tag[]
-  repo_tag: RepoTag[]
+  keyword: Keyword[]
+  repo_keyword: RepoKeyword[]
   npm_package: NpmPackage[]
   npm_package_keyword: NpmPackageKeyword[]
   npm_package_dependency: NpmPackageDependency[]
@@ -218,20 +220,21 @@ export let proxy = proxySchema<DBProxy>({
       ['programming_language', { field: 'programming_language_id', table: 'programming_language' }],
       ['page', { field: 'page_id', table: 'page' }],
     ],
-    tag: [],
-    repo_tag: [
+    keyword: [],
+    repo_keyword: [
       /* foreign references */
       ['repo', { field: 'repo_id', table: 'repo' }],
-      ['tag', { field: 'tag_id', table: 'tag' }],
+      ['keyword', { field: 'keyword_id', table: 'keyword' }],
     ],
     npm_package: [
       /* foreign references */
       ['repo', { field: 'repo_id', table: 'repo' }],
       ['page', { field: 'page_id', table: 'page' }],
+      ['download_page', { field: 'download_page_id', table: 'page' }],
     ],
     npm_package_keyword: [
       /* foreign references */
-      ['tag', { field: 'tag_id', table: 'tag' }],
+      ['keyword', { field: 'keyword_id', table: 'keyword' }],
       ['npm_package', { field: 'npm_package_id', table: 'npm_package' }],
     ],
     npm_package_dependency: [
