@@ -29,7 +29,7 @@ export async function up(knex: Knex): Promise<void> {
       table.increments('id')
       table.integer('package_id').unsigned().notNullable().references('npm_package.id')
       table.text('name').notNullable()
-      table.integer('dependency_id').unsigned().nullable().references('npm_package.id')
+      table.integer('dependency_id').unsigned().notNullable().references('npm_package.id')
       table.enum('type', ['prod', 'dev', 'peer', 'optional']).notNullable()
       table.timestamps(false, true)
     })
