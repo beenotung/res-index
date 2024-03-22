@@ -5,6 +5,8 @@ import { NpmPackage, proxy, NpmPackageDependency } from './proxy'
 import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
 import {
+  ParseResult,
+  Parser,
   array,
   date,
   dateString,
@@ -12,30 +14,66 @@ import {
   int,
   object,
   optional,
+  or,
   string,
 } from 'cast.ts'
 import { DAY } from '@beenotung/tslib/time'
+import { startTimer } from '@beenotung/tslib/timer'
+import { writeFileSync } from 'fs'
+
+// TODO get repo details
+// TODO continues updates each pages
 
 async function main() {
+  if (proxy.repo.length == 0 || proxy.npm_package.length == 0) {
+    await initialPopulate()
+  }
+  await populateNpmPackages()
+  console.log('done.')
+}
+
+async function initialPopulate() {
   let browser = await chromium.launch({ headless: false })
   let page = new GracefulPage({ from: browser })
-  await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
-  await collectNpmPackages(page, { scope: 'beenotung' })
-  for (let npm_package of filter(proxy.npm_package, {
-    last_publish: null,
-    author_id: getAuthorId('beenotung'),
-  })) {
-    await collectNpmPackageDetail(npm_package)
+  if (proxy.repo.length == 0) {
+    await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
   }
-  for (let npm_package of filter(proxy.npm_package, {
-    weekly_downloads: null,
-    author_id: getAuthorId('beenotung'),
-  })) {
-    await collectNpmPackageDownloads(npm_package)
+  if (proxy.npm_package.length == 0) {
+    await collectNpmPackages(page, { scope: 'beenotung' })
   }
   await page.close()
   await browser.close()
-  console.log('collect done.')
+}
+
+async function populateNpmPackages() {
+  let timer = startTimer('populate npm packages')
+  for (;;) {
+    timer.next('populate npm package weekly-download')
+    let list1 = filter(proxy.npm_package, {
+      weekly_downloads: null,
+    })
+    timer.setEstimateProgress(list1.length)
+    for (let npm_package of list1) {
+      // TODO mark and skip private packages
+      if (!npm_package.download_page!.check_time) {
+        await collectNpmPackageDownloads(npm_package)
+      }
+      timer.tick()
+    }
+
+    timer.next('populate npm package detail')
+    let list2 = filter(proxy.npm_package, {
+      last_publish: null,
+    })
+    timer.setEstimateProgress(list2.length)
+    for (let npm_package of list2) {
+      await collectNpmPackageDetail(npm_package)
+      timer.tick()
+    }
+
+    if (list1.length == 0 && list2.length == 0) break
+  }
+  timer.end()
 }
 
 async function collectGithubRepositories(
@@ -305,6 +343,15 @@ function storeNpmPackage(pkg: {
   }
 }
 
+let npm_repository_parser = or([
+  object({
+    type: optional(string({ sampleValue: 'git' })),
+    url: string({
+      sampleValue: 'git+https://github.com/beenotung/better-sqlite3-schema.git',
+    }),
+  }),
+  string(),
+])
 let npmPackageDetailParser = object({
   name: string(),
   versions: dict({
@@ -349,14 +396,8 @@ let npmPackageDetailParser = object({
   description: optional(string()),
   homepage: optional(string()),
   keywords: optional(array(string())),
-  repository: optional(
-    object({
-      type: optional(string({ sampleValue: 'git' })),
-      url: string({
-        sampleValue:
-          'git+https://github.com/beenotung/better-sqlite3-schema.git',
-      }),
-    }),
+  repository: optional<ParseResult<typeof npm_repository_parser>>(
+    npm_repository_parser,
   ),
 })
 let packageTimeParser = object({
@@ -364,11 +405,16 @@ let packageTimeParser = object({
   created: optional(date()),
 })
 
+function saveJSON(filename: string, payload: string) {
+  writeFileSync(filename, JSON.stringify(JSON.parse(payload), null, 2))
+}
+
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let page = npm_package.page!
   let url = page!.url
   let res = await fetch(url)
   let payload = await res.text()
+  // saveJSON('npm.json', payload)
   let pkg = npmPackageDetailParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
@@ -449,7 +495,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.file_count != file_count)
       npm_package.file_count = file_count
 
-    let repository_url = pkg.repository?.url || null
+    let repository_url =
+      typeof pkg.repository == 'string'
+        ? pkg.repository
+        : pkg.repository?.url || null
     if (repository_url?.startsWith('git+https://')) {
       // e.g. "git+https://github.com/beenotung/better-sqlite3-schema.git"
       repository_url = repository_url.replace('git+https://', 'https://')
@@ -524,18 +573,23 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   })()
 }
 
-let npmPackageDownloadsParser = object({
-  downloads: int({ min: 0, sampleValue: 96 }),
-  start: dateString({ sampleValue: '2024-03-15"' }),
-  end: dateString({ sampleValue: '2024-03-21' }),
-  package: string({ sampleValue: 'url-router.ts' }),
-})
+let npmPackageDownloadsParser = or([
+  object({
+    downloads: int({ min: 0, sampleValue: 96 }),
+    start: dateString({ sampleValue: '2024-03-15"' }),
+    end: dateString({ sampleValue: '2024-03-21' }),
+    package: string({ sampleValue: 'url-router.ts' }),
+  }),
+  // e.g. not-found error for private packages
+  object({ error: string() }),
+])
 
 async function collectNpmPackageDownloads(npm_package: NpmPackage) {
   let page = npm_package.download_page!
   let url = page.url
   let res = await fetch(url)
   let payload = await res.text()
+  // saveJSON('download.json', payload)
   let json = npmPackageDownloadsParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
@@ -543,6 +597,7 @@ async function collectNpmPackageDownloads(npm_package: NpmPackage) {
     page.check_time = now
     if (page.payload == payload) return
     page.payload = payload
+    if ('error' in json) return
     page.update_time = parseNpmPackageDownloadsUpdateTime(json)
 
     /* npm package */
