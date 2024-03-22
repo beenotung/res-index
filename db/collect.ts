@@ -14,6 +14,7 @@ import {
   optional,
   string,
 } from 'cast.ts'
+import { DAY } from '@beenotung/tslib/time'
 
 async function main() {
   let browser = await chromium.launch({ headless: false })
@@ -538,12 +539,23 @@ async function collectNpmPackageDownloads(npm_package: NpmPackage) {
     page.check_time = now
     if (page.payload == payload) return
     page.payload = payload
-    page.update_time = now
+    page.update_time = parseNpmPackageDownloadsUpdateTime(json)
 
     /* npm package */
     if (npm_package.weekly_downloads != json.downloads)
       npm_package.weekly_downloads = json.downloads
   })()
+}
+
+function parseNpmPackageDownloadsUpdateTime(json: {
+  /** @example '2024-03-21' */
+  end: string
+}) {
+  let parts = json.end.split('-')
+  let date = new Date()
+  date.setFullYear(+parts[0], +parts[1] - 1, +parts[2])
+  date.setHours(0, 0, 0, 0)
+  return date.getTime() + 1 * DAY
 }
 
 function getPageId(url: string): number {
