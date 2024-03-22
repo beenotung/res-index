@@ -21,11 +21,15 @@ async function main() {
   let page = new GracefulPage({ from: browser })
   await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
   await collectNpmPackages(page, { scope: 'beenotung' })
-  for (let npm_package of filter(proxy.npm_package, { last_publish: null })) {
+  for (let npm_package of filter(proxy.npm_package, {
+    last_publish: null,
+    author_id: getAuthorId('beenotung'),
+  })) {
     await collectNpmPackageDetail(npm_package)
   }
   for (let npm_package of filter(proxy.npm_package, {
     weekly_downloads: null,
+    author_id: getAuthorId('beenotung'),
   })) {
     await collectNpmPackageDownloads(npm_package)
   }
