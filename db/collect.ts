@@ -445,7 +445,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     let packageTime = packageTimeParser.parse(pkg.time)
     let create_time = packageTime.created?.getTime() || null
-    let modified_time = packageTime.modified?.getTime() || null
 
     function findAuthor() {
       if (version._npmUser?.name) {
@@ -466,12 +465,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.create_time != create_time)
       npm_package.create_time = create_time
 
-    if (npm_package.last_publish != modified_time)
-      npm_package.last_publish ||= modified_time
-
     if (npm_package.version != version_name) npm_package.version = version_name
 
-    if (npm_package.last_publish != publish_time) publish_time
+    if (npm_package.last_publish != publish_time)
+      npm_package.last_publish = publish_time
 
     function findUnpackedSize() {
       if (version.dist.unpackedSize) {
