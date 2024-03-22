@@ -100,8 +100,15 @@ export type ProgrammingLanguage = {
   name: string
 }
 
+export type Author = {
+  id?: null | number
+  username: string
+}
+
 export type Repo = {
   id?: null | number
+  author_id: number
+  author?: Author
   is_fork: boolean
   url: string
   desc: null | string
@@ -127,6 +134,8 @@ export type RepoKeyword = {
 
 export type NpmPackage = {
   id?: null | number
+  author_id: null | number
+  author?: Author
   name: string
   version: null | string
   desc: null | string
@@ -176,6 +185,7 @@ export type DBProxy = {
   verification_code: VerificationCode[]
   page: Page[]
   programming_language: ProgrammingLanguage[]
+  author: Author[]
   repo: Repo[]
   keyword: Keyword[]
   repo_keyword: RepoKeyword[]
@@ -215,8 +225,10 @@ export let proxy = proxySchema<DBProxy>({
     ],
     page: [],
     programming_language: [],
+    author: [],
     repo: [
       /* foreign references */
+      ['author', { field: 'author_id', table: 'author' }],
       ['programming_language', { field: 'programming_language_id', table: 'programming_language' }],
       ['page', { field: 'page_id', table: 'page' }],
     ],
@@ -228,6 +240,7 @@ export let proxy = proxySchema<DBProxy>({
     ],
     npm_package: [
       /* foreign references */
+      ['author', { field: 'author_id', table: 'author' }],
       ['repo', { field: 'repo_id', table: 'repo' }],
       ['page', { field: 'page_id', table: 'page' }],
       ['download_page', { field: 'download_page_id', table: 'page' }],

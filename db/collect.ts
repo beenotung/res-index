@@ -1,7 +1,7 @@
 import { del, filter, find } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
 import { chromium } from 'playwright'
-import { NpmPackage, proxy, NpmPackageDependency, Page } from './proxy'
+import { NpmPackage, proxy, NpmPackageDependency } from './proxy'
 import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
 import {
@@ -18,8 +18,8 @@ import {
 async function main() {
   let browser = await chromium.launch({ headless: false })
   let page = new GracefulPage({ from: browser })
-  // await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
-  // await collectNpmPackages(page, { scope: 'beenotung' })
+  await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
+  await collectNpmPackages(page, { scope: 'beenotung' })
   for (let npm_package of filter(proxy.npm_package, { last_publish: null })) {
     await collectNpmPackageDetail(npm_package)
   }
@@ -136,6 +136,7 @@ async function collectGithubRepositories(
             })
         if (!repo) {
           let id = proxy.repo.push({
+            author_id: getAuthorId(options.username),
             is_fork: repoData.is_fork,
             url: repoData.url,
             desc,
@@ -246,14 +247,21 @@ async function collectNpmPackages(
     }
     function storePackages() {
       for (let pkg of res.packages) {
-        let npm_package = storeNpmPackage(pkg)
-        if (npm_package.desc != pkg.desc) npm_package.desc = pkg.desc
+        storeNpmPackage({
+          scope: options.scope,
+          name: pkg.name,
+          desc: pkg.desc,
+        })
       }
     }
   })()
 }
 
-function storeNpmPackage(pkg: { name: string }) {
+function storeNpmPackage(pkg: {
+  scope?: string
+  name: string
+  desc?: string | null
+}): number {
   /* npm package page */
   let package_page_url = `https://registry.npmjs.org/${pkg.name}`
   let package_page_id = getPageId(package_page_url)
@@ -266,9 +274,10 @@ function storeNpmPackage(pkg: { name: string }) {
   let npm_package = find(proxy.npm_package, { name: pkg.name })
   if (!npm_package) {
     let id = proxy.npm_package.push({
+      author_id: pkg.scope ? getAuthorId(pkg.scope) : null,
       name: pkg.name,
       version: null,
-      desc: null,
+      desc: pkg.desc || null,
       create_time: null,
       last_publish: null,
       weekly_downloads: null,
@@ -280,10 +289,15 @@ function storeNpmPackage(pkg: { name: string }) {
       page_id: package_page_id,
       download_page_id,
     })
-    npm_package = proxy.npm_package[id]
+    return id
+  } else {
+    if (pkg.scope) {
+      let author_id = getAuthorId(pkg.scope)
+      if (npm_package.author_id != author_id) npm_package.author_id = author_id
+    }
+    if (pkg.desc && npm_package.desc != pkg.desc) npm_package.desc = pkg.desc
+    return npm_package.id!
   }
-
-  return npm_package
 }
 
 let npmPackageDetailParser = object({
@@ -319,6 +333,11 @@ let npmPackageDetailParser = object({
         fileCount: optional(int({ min: 1 })),
         unpackedSize: optional(int({ min: 1 })),
       }),
+      _npmUser: optional(
+        object({
+          name: string(),
+        }),
+      ),
     }),
   }),
   time: dict({ key: string(), value: date() }),
@@ -361,13 +380,28 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         version,
         publish_time: date.getTime(),
       }))
-      .filter(item => item.version != 'modified' && item.version != 'created')
       .sort((a, b) => b.publish_time - a.publish_time)
-    let { version, publish_time } = timeList[0]
+
+    let { version, publish_time } = timeList.filter(
+      item => item.version != 'modified' && item.version != 'created',
+    )[0]
 
     let packageTime = packageTimeParser.parse(pkg.time)
     let create_time = packageTime.created?.getTime() || null
     let modified_time = packageTime.modified?.getTime() || null
+
+    function findAuthor() {
+      for (let time of timeList) {
+        let version = pkg.versions[time.version]
+        if (version?._npmUser?.name) {
+          return version?._npmUser?.name
+        }
+      }
+      return null
+    }
+    let author = findAuthor()
+    let author_id = author ? getAuthorId(author) : null
+    if (npm_package.author_id !== author_id) npm_package.author_id = author_id
 
     if (npm_package.create_time != create_time)
       npm_package.create_time = create_time
@@ -475,10 +509,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         }
       }
       for (let name of names) {
-        let dep_package = storeNpmPackage({ name })
+        let dependency_package_id = storeNpmPackage({ name })
         proxy.npm_package_dependency.push({
           package_id: npm_package_id,
-          dependency_id: dep_package.id!,
+          dependency_id: dependency_package_id,
           type,
         })
       }
@@ -522,6 +556,12 @@ function getPageId(url: string): number {
     check_time: null,
     update_time: null,
   })
+}
+
+function getAuthorId(username: string): number {
+  let author = find(proxy.author, { username })
+  if (author) return author.id!
+  return proxy.author.push({ username })
 }
 
 main().catch(e => console.error(e))
