@@ -364,7 +364,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let url = page!.url
   let res = await fetch(url)
   let payload = await res.text()
-  console.log('page:', page.id)
   let pkg = npmPackageDetailParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
