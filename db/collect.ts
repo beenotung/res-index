@@ -4,7 +4,16 @@ import { chromium } from 'playwright'
 import { NpmPackage, proxy, NpmPackageDependency } from './proxy'
 import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
-import { array, date, dict, int, object, optional, string } from 'cast.ts'
+import {
+  array,
+  date,
+  dateString,
+  dict,
+  int,
+  object,
+  optional,
+  string,
+} from 'cast.ts'
 import { writeFileSync } from 'fs'
 
 async function main() {
@@ -14,6 +23,11 @@ async function main() {
   // await collectNpmPackages(page, { scope: 'beenotung' })
   for (let npm_package of filter(proxy.npm_package, { last_publish: null })) {
     await collectNpmPackageDetail(npm_package)
+  }
+  for (let npm_package of filter(proxy.npm_package, {
+    weekly_downloads: null,
+  })) {
+    await collectNpmPackageDownloads(npm_package)
   }
   await page.close()
   await browser.close()
@@ -255,7 +269,7 @@ function storeNpmPackage(pkg: { name: string }) {
   }
 
   /* download trend page */
-  let downloadUrl = `https://api.npmjs.org/downloads/point/last-day/${pkg.name}`
+  let downloadUrl = `https://api.npmjs.org/downloads/point/last-week/${pkg.name}`
   let downloadPage = find(proxy.page, { url: downloadUrl })
   if (!downloadPage) {
     let id = proxy.page.push({
@@ -327,15 +341,18 @@ let npmPackageDetailParser = object({
     }),
   }),
   time: dict({ key: string(), value: date() }),
-  description: string(),
-  homepage: string(),
-  keywords: array(string()),
-  repository: object({
-    type: string({ sampleValue: 'git' }),
-    url: string({
-      sampleValue: 'git+https://github.com/beenotung/better-sqlite3-schema.git',
+  description: optional(string()),
+  homepage: optional(string()),
+  keywords: optional(array(string())),
+  repository: optional(
+    object({
+      type: optional(string({ sampleValue: 'git' })),
+      url: string({
+        sampleValue:
+          'git+https://github.com/beenotung/better-sqlite3-schema.git',
+      }),
     }),
-  }),
+  ),
 })
 let packageTimeParser = object({
   modified: optional(date()),
@@ -343,14 +360,15 @@ let packageTimeParser = object({
 })
 
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
-  let url = npm_package.page!.url
+  let page = npm_package.page!
+  let url = page!.url
   let res = await fetch(url)
   let payload = await res.text()
+  console.log('page:', page.id)
   let pkg = npmPackageDetailParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
     /* npm package page */
-    let page = npm_package.page!
     page.check_time = now
     if (page.payload == payload) return
     page.payload = payload
@@ -362,9 +380,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         version,
         publish_time: date.getTime(),
       }))
+      .filter(item => item.version != 'modified' && item.version != 'created')
       .sort((a, b) => b.publish_time - a.publish_time)
     let { version, publish_time } = timeList[0]
-    console.log('timeList:', timeList)
 
     let packageTime = packageTimeParser.parse(pkg.time)
     let create_time = packageTime.created?.getTime() || null
@@ -379,9 +397,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.version != version) version
 
     if (npm_package.last_publish != publish_time) publish_time
-
-    // TODO collect weekly download from another API
-    // npm_package.weekly_downloads = '?'
 
     let versionDetail = pkg.versions[version]
     if (!versionDetail)
@@ -415,28 +430,38 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.file_count != file_count)
       npm_package.file_count = file_count
 
-    let repository_url = pkg.repository.url.replace('git+https://', 'https://')
-    npm_package.repository = repository_url
+    let repository_url = pkg.repository?.url || null
+    if (repository_url?.startsWith('git+https://')) {
+      // e.g. "git+https://github.com/beenotung/better-sqlite3-schema.git"
+      repository_url = repository_url.replace('git+https://', 'https://')
+    } else if (repository_url?.startsWith('git://')) {
+      // e.g. "git://github.com/beenotung/erlang.js.git"
+      repository_url = repository_url
+        .replace('git://', 'https://')
+        .replace(/\.git$/, '')
+    }
+    if (npm_package.repository != repository_url)
+      npm_package.repository = repository_url
 
-    if (!npm_package.repo_id) {
+    if (repository_url) {
       let repo = find(proxy.repo, { url: repository_url })
-      if (repo) {
+      if (repo && repo.id != npm_package.repo_id) {
         npm_package.repo_id = repo.id!
       }
     }
 
-    if (npm_package.homepage != pkg.homepage)
-      npm_package.homepage = pkg.homepage
+    let homepage = pkg.homepage || null
+    if (npm_package.homepage != homepage) npm_package.homepage = homepage
 
     let npm_package_id = npm_package.id!
 
     /* npm package keywords */
     for (let row of filter(proxy.npm_package_keyword, { npm_package_id })) {
-      if (!pkg.keywords.includes(row.keyword!.name)) {
+      if (!pkg.keywords || !pkg.keywords.includes(row.keyword!.name)) {
         delete proxy.npm_package_keyword[row.id!]
       }
     }
-    for (let name of pkg.keywords) {
+    for (let name of pkg.keywords || []) {
       let keyword_id =
         find(proxy.keyword, { name })?.id || proxy.keyword.push({ name })
       find(proxy.npm_package_keyword, { npm_package_id, keyword_id }) ||
@@ -480,6 +505,31 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   })()
 }
 
-async function collectNpmPackageDownloads(npm_package: NpmPackage) {}
+let npmPackageDownloadsParser = object({
+  downloads: int({ min: 0, sampleValue: 96 }),
+  start: dateString({ sampleValue: '2024-03-15"' }),
+  end: dateString({ sampleValue: '2024-03-21' }),
+  package: string({ sampleValue: 'url-router.ts' }),
+})
+
+async function collectNpmPackageDownloads(npm_package: NpmPackage) {
+  let page = npm_package.download_page!
+  let url = page.url
+  let res = await fetch(url)
+  let payload = await res.text()
+  let json = npmPackageDownloadsParser.parse(JSON.stringify(payload))
+  let now = Date.now()
+  db.transaction(() => {
+    /* npm download page */
+    page.check_time = now
+    if (page.payload == payload) return
+    page.payload = payload
+    page.update_time = now
+
+    /* npm package */
+    if (npm_package.weekly_downloads != json.downloads)
+      npm_package.weekly_downloads = json.downloads
+  })()
+}
 
 main().catch(e => console.error(e))
