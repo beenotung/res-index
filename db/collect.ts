@@ -1,4 +1,4 @@
-import { del, filter, find, seedRow } from 'better-sqlite3-proxy'
+import { del, filter, find } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
 import { chromium } from 'playwright'
 import { NpmPackage, proxy, NpmPackageDependency, Page } from './proxy'
@@ -14,7 +14,6 @@ import {
   optional,
   string,
 } from 'cast.ts'
-import { writeFileSync } from 'fs'
 
 async function main() {
   let browser = await chromium.launch({ headless: false })
