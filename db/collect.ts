@@ -437,8 +437,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     let version_name = pkg['dist-tags'].latest
     let publish_time = pkg.time[version_name]?.getTime()
-    let versionDetail = pkg.versions[version_name]
-    if (!publish_time || !versionDetail)
+    let version = pkg.versions[version_name]
+    if (!publish_time || !version)
       throw new Error(
         `failed to find npm package version detail, name: ${npm_package.name}, version: ${version_name}`,
       )
@@ -448,8 +448,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     let modified_time = packageTime.modified?.getTime() || null
 
     function findAuthor() {
-      if (versionDetail._npmUser?.name) {
-        return versionDetail._npmUser.name
+      if (version._npmUser?.name) {
+        return version._npmUser.name
       }
       for (let time of timeList) {
         let version = pkg.versions[time.version]
@@ -474,8 +474,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.last_publish != publish_time) publish_time
 
     function findUnpackedSize() {
-      if (versionDetail.dist.unpackedSize) {
-        return versionDetail.dist.unpackedSize
+      if (version.dist.unpackedSize) {
+        return version.dist.unpackedSize
       }
       for (let time of timeList) {
         let version = pkg.versions[time.version]
@@ -490,8 +490,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       npm_package.unpacked_size = unpacked_size
 
     function findFileCount() {
-      if (versionDetail?.dist.fileCount) {
-        return versionDetail.dist.fileCount
+      if (version?.dist.fileCount) {
+        return version.dist.fileCount
       }
       for (let time of timeList) {
         let version = pkg.versions[time.version]
@@ -547,10 +547,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     }
 
     /* dependencies */
-    storeDeps('prod', versionDetail.dependencies)
-    storeDeps('dev', versionDetail.devDependencies)
-    storeDeps('peer', versionDetail.peerDependencies)
-    storeDeps('optional', versionDetail.optionalDependencies)
+    storeDeps('prod', version.dependencies)
+    storeDeps('dev', version.devDependencies)
+    storeDeps('peer', version.peerDependencies)
+    storeDeps('optional', version.optionalDependencies)
     function storeDeps(
       type: NpmPackageDependency['type'],
       deps: undefined | Record<string, string>,
