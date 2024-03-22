@@ -1,7 +1,7 @@
 import { del, filter, find, seedRow } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
 import { chromium } from 'playwright'
-import { NpmPackage, proxy, NpmPackageDependency } from './proxy'
+import { NpmPackage, proxy, NpmPackageDependency, Page } from './proxy'
 import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
 import {
@@ -256,30 +256,12 @@ async function collectNpmPackages(
 
 function storeNpmPackage(pkg: { name: string }) {
   /* npm package page */
-  let pkgUrl = `https://registry.npmjs.org/${pkg.name}`
-  let pkgPage = find(proxy.page, { url: pkgUrl })
-  if (!pkgPage) {
-    let id = proxy.page.push({
-      url: pkgUrl,
-      payload: null,
-      check_time: null,
-      update_time: null,
-    })
-    pkgPage = proxy.page[id]
-  }
+  let package_page_url = `https://registry.npmjs.org/${pkg.name}`
+  let package_page_id = getPageId(package_page_url)
 
   /* download trend page */
-  let downloadUrl = `https://api.npmjs.org/downloads/point/last-week/${pkg.name}`
-  let downloadPage = find(proxy.page, { url: downloadUrl })
-  if (!downloadPage) {
-    let id = proxy.page.push({
-      url: downloadUrl,
-      payload: null,
-      check_time: null,
-      update_time: null,
-    })
-    downloadPage = proxy.page[id]
-  }
+  let download_page_url = `https://api.npmjs.org/downloads/point/last-week/${pkg.name}`
+  let download_page_id = getPageId(download_page_url)
 
   /* npm package */
   let npm_package = find(proxy.npm_package, { name: pkg.name })
@@ -296,8 +278,8 @@ function storeNpmPackage(pkg: { name: string }) {
       repository: null,
       repo_id: null,
       homepage: null,
-      page_id: pkgPage.id!,
-      download_page_id: downloadPage.id!,
+      page_id: package_page_id,
+      download_page_id,
     })
     npm_package = proxy.npm_package[id]
   }
@@ -530,6 +512,17 @@ async function collectNpmPackageDownloads(npm_package: NpmPackage) {
     if (npm_package.weekly_downloads != json.downloads)
       npm_package.weekly_downloads = json.downloads
   })()
+}
+
+function getPageId(url: string): number {
+  let page = find(proxy.page, { url })
+  if (page) return page.id!
+  return proxy.page.push({
+    url,
+    payload: null,
+    check_time: null,
+    update_time: null,
+  })
 }
 
 main().catch(e => console.error(e))
