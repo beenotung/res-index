@@ -531,7 +531,7 @@ async function collectNpmPackageDownloads(npm_package: NpmPackage) {
   let url = page.url
   let res = await fetch(url)
   let payload = await res.text()
-  let json = npmPackageDownloadsParser.parse(JSON.stringify(payload))
+  let json = npmPackageDownloadsParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
     /* npm download page */
