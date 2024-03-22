@@ -353,8 +353,11 @@ let npm_repository_parser = or([
   string(),
 ])
 let npmPackageDetailParser = object({
-  name: string(),
-  versions: dict({
+  'name': string(),
+  'dist-tags': object({
+    latest: string(),
+  }),
+  'versions': dict({
     key: string({ sampleValue: '0.0.1' }),
     value: object({
       dependencies: optional(
@@ -392,11 +395,11 @@ let npmPackageDetailParser = object({
       ),
     }),
   }),
-  time: dict({ key: string(), value: date() }),
-  description: optional(string()),
-  homepage: optional(string()),
-  keywords: optional(array(string())),
-  repository: optional<ParseResult<typeof npm_repository_parser>>(
+  'time': dict({ key: string(), value: date() }),
+  'description': optional(string()),
+  'homepage': optional(string()),
+  'keywords': optional(array(string())),
+  'repository': optional<ParseResult<typeof npm_repository_parser>>(
     npm_repository_parser,
   ),
 })
@@ -432,19 +435,26 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       }))
       .sort((a, b) => b.publish_time - a.publish_time)
 
-    let { version, publish_time } = timeList.filter(
-      item => item.version != 'modified' && item.version != 'created',
-    )[0]
+    let version_name = pkg['dist-tags'].latest
+    let publish_time = pkg.time[version_name]?.getTime()
+    let versionDetail = pkg.versions[version_name]
+    if (!publish_time || !versionDetail)
+      throw new Error(
+        `failed to find npm package version detail, name: ${npm_package.name}, version: ${version_name}`,
+      )
 
     let packageTime = packageTimeParser.parse(pkg.time)
     let create_time = packageTime.created?.getTime() || null
     let modified_time = packageTime.modified?.getTime() || null
 
     function findAuthor() {
+      if (versionDetail._npmUser?.name) {
+        return versionDetail._npmUser.name
+      }
       for (let time of timeList) {
         let version = pkg.versions[time.version]
         if (version?._npmUser?.name) {
-          return version?._npmUser?.name
+          return version._npmUser.name
         }
       }
       return null
@@ -459,17 +469,14 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.last_publish != modified_time)
       npm_package.last_publish ||= modified_time
 
-    if (npm_package.version != version) version
+    if (npm_package.version != version_name) npm_package.version = version_name
 
     if (npm_package.last_publish != publish_time) publish_time
 
-    let versionDetail = pkg.versions[version]
-    if (!versionDetail)
-      throw new Error(
-        `failed to find npm package version detail, name: ${npm_package.name}, version: ${version}`,
-      )
-
     function findUnpackedSize() {
+      if (versionDetail.dist.unpackedSize) {
+        return versionDetail.dist.unpackedSize
+      }
       for (let time of timeList) {
         let version = pkg.versions[time.version]
         if (version?.dist.unpackedSize) {
@@ -483,6 +490,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       npm_package.unpacked_size = unpacked_size
 
     function findFileCount() {
+      if (versionDetail?.dist.fileCount) {
+        return versionDetail.dist.fileCount
+      }
       for (let time of timeList) {
         let version = pkg.versions[time.version]
         if (version?.dist.fileCount) {
