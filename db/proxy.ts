@@ -107,6 +107,7 @@ export type Author = {
 
 export type Repo = {
   id?: null | number
+  name: string
   author_id: number
   author?: Author
   is_fork: boolean

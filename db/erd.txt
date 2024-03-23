@@ -128,6 +128,7 @@ repo
 ----
 id integer PK
 author_id integer FK >0- author.id
+name text
 is_fork boolean
 url text unique
 desc text NULL

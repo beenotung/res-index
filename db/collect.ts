@@ -206,8 +206,11 @@ async function collectGithubRepositories(
               name: repoData.programming_language,
             })
         if (!repo) {
+          let parts = repoData.url.split('/')
+          let name = parts.pop() || parts.pop()!
           let id = proxy.repo.push({
             author_id: getAuthorId(options.username),
+            name,
             is_fork: repoData.is_fork,
             url: repoData.url,
             desc,
