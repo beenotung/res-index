@@ -66,6 +66,30 @@ async function collectPendingPages(page: GracefulPage) {
         if (!repo)
           throw new Error('failed to find repository from page, url: ' + url)
         await collectGithubRepoDetails(page, repo)
+      } else if (
+        // e.g. "https://registry.npmjs.org/@beenotung/tslib"
+        url.startsWith('https://registry.npmjs.org/')
+      ) {
+        let npm_package = find(proxy.npm_package, { page_id: id! })
+        if (!npm_package)
+          throw new Error('failed to find npm package from page, url: ' + url)
+        await collectNpmPackageDetail(npm_package)
+      } else if (
+        // e.g. "https://api.npmjs.org/downloads/point/last-week/@beenotung/tslib"
+        url.startsWith('https://api.npmjs.org/downloads/point/last-week/')
+      ) {
+        let npm_package = find(proxy.npm_package, { download_page_id: id! })
+        if (!npm_package)
+          throw new Error('failed to find npm package from page, url: ' + url)
+        await collectNpmPackageDownloads(npm_package)
+      } else if (
+        // e.g. "https://www.npmjs.com/browse/depended/@beenotung/tslib?offset=0"
+        url.startsWith('https://www.npmjs.com/browse/depended/')
+      ) {
+        let npm_package = find(proxy.npm_package, { dependent_page_id: id! })
+        if (!npm_package)
+          throw new Error('failed to find npm package from page, url: ' + url)
+        await collectNpmPackageDependents(page, npm_package.name)
       } else {
         throw new Error(`unsupported page, url: ${url}`)
       }
