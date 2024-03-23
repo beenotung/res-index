@@ -296,10 +296,18 @@ let nullable_date = nullable(date())
 async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"
   await page.goto(repo.url)
-  // FIXME handle case when the repo doesn't have any commits
-  await (
-    await page.getPage()
-  ).waitForSelector('[data-testid="latest-commit-details"] relative-time')
+  let is_empty = await page.evaluate(() => {
+    for (let h3 of document.querySelectorAll('h3')) {
+      if (h3.innerText == 'This repository is empty.') {
+        return true
+      }
+    }
+  })
+  if (!is_empty) {
+    await (
+      await page.getPage()
+    ).waitForSelector('[data-testid="latest-commit-details"] relative-time')
+  }
   let res = await page.evaluate(() => {
     let p = document.querySelector<HTMLParagraphElement>('.Layout-sidebar h2+p')
     let desc =
