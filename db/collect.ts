@@ -46,11 +46,17 @@ async function main() {
 
 async function collectPendingPages(page: GracefulPage) {
   let timer = startTimer('collect pending pages')
+  let dependent_rate_limited = false
   for (;;) {
     let pages = filter(proxy.page, { check_time: null })
     if (pages.length == 0) break
+    if (dependent_rate_limited) {
+      await later(5000)
+      dependent_rate_limited = false
+    }
     timer.setEstimateProgress(pages.length)
     for (let { id, url } of pages) {
+      // timer.progress(' > url: ' + url)
       if (
         // e.g. "https://github.com/beenotung?page=1&tab=repositories"
         url.startsWith('https://github.com/') &&
@@ -85,10 +91,11 @@ async function collectPendingPages(page: GracefulPage) {
         // e.g. "https://www.npmjs.com/browse/depended/@beenotung/tslib?offset=0"
         url.startsWith('https://www.npmjs.com/browse/depended/')
       ) {
-        let npm_package = find(proxy.npm_package, { dependent_page_id: id! })
-        if (!npm_package)
-          throw new Error('failed to find npm package from page, url: ' + url)
-        await collectNpmPackageDependents(page, npm_package.name)
+        if (dependent_rate_limited) continue
+        let res = await checkNpmPackageDependents(page, url)
+        if (res == 'rate limited') {
+          dependent_rate_limited = true
+        }
       } else {
         throw new Error(`unsupported page, url: ${url}`)
       }
@@ -827,18 +834,34 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
 async function collectNpmPackageDependents(page: GracefulPage, name: string) {
   let indexUrl = `https://www.npmjs.com/browse/depended/${name}?offset=0`
-  await checkNpmPackageDependents(page, indexUrl)
+  return await checkNpmPackageDependents(page, indexUrl)
 }
 
 async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
-  await page.goto(indexUrl)
+  let response = await page.goto(indexUrl)
+  if (response?.status() == 429) {
+    return 'rate limited' as const
+  }
   let res = await page.evaluate(() => {
+    let name = document
+      .querySelector('h1 a[href*="/package/"]')
+      ?.getAttribute('href')
+      ?.replace('/package/', '')
+    if (!name) {
+      for (let h3 of document.querySelectorAll('h3')) {
+        if (h3.innerText == 'looks like something unexpected occurred!') {
+          return 'rate limited' as const
+        }
+      }
+      throw new Error('failed to parse package name')
+    }
     let packages = Array.from(
       document.querySelectorAll<HTMLAnchorElement>('li a[href*="/package/"]'),
       a => {
         // e.g. "/package/webpack-dev-server"
         let name = a.getAttribute('href')?.replace('/package/', '')
-        if (!name) throw new Error('failed to parse package name')
+        if (!name)
+          throw new Error('failed to parse name of npm package dependent')
         let section = a.closest('section')
         if (!section)
           throw new Error('failed to locate section of npm package dependent')
@@ -862,8 +885,12 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
       ),
     ).find(a => a.textContent == 'Next Page')
     let nextHref = link?.href || null
-    return { packages, nextHref }
+    return { name, packages, nextHref }
   })
+  if (res == 'rate limited') {
+    return res
+  }
+  let { nextHref, packages } = res
   let indexPayload = JSON.stringify(res)
   let now = Date.now()
   db.transaction(() => {
@@ -887,11 +914,11 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
     }
 
     /* next index page */
-    if (res.nextHref) {
-      let nextPage = find(proxy.page, { url: res.nextHref })
+    if (nextHref) {
+      let nextPage = find(proxy.page, { url: nextHref })
       if (!nextPage) {
         proxy.page.push({
-          url: res.nextHref,
+          url: nextHref,
           payload: null,
           check_time: null,
           update_time: null,
@@ -900,7 +927,7 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
     }
 
     function storePackages() {
-      for (let pkg of res.packages) {
+      for (let pkg of packages) {
         storeNpmPackage({
           scope: pkg.scope,
           name: pkg.name,
@@ -909,8 +936,8 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
       }
     }
   })()
-  if (res.nextHref) {
-    await checkNpmPackageDependents(page, res.nextHref)
+  if (nextHref) {
+    await checkNpmPackageDependents(page, nextHref)
   }
 }
 
