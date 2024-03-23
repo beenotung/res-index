@@ -45,6 +45,16 @@ async function initialPopulate() {
   await browser.close()
 }
 
+let select_new_npm_package_ids = db
+  .prepare(
+    /* sql */ `
+select id from npm_package
+where last_publish_time is null
+  and unpublish_time is null
+`,
+  )
+  .pluck()
+
 async function populateNpmPackages() {
   let timer = startTimer('populate npm packages')
   for (;;) {
@@ -62,11 +72,10 @@ async function populateNpmPackages() {
     }
 
     timer.next('populate npm package detail')
-    let list2 = filter(proxy.npm_package, {
-      last_publish: null,
-    })
+    let list2 = select_new_npm_package_ids.all() as number[]
     timer.setEstimateProgress(list2.length)
-    for (let npm_package of list2) {
+    for (let id of list2) {
+      let npm_package = proxy.npm_package[id]
       await collectNpmPackageDetail(npm_package)
       timer.tick()
     }
@@ -322,7 +331,8 @@ function storeNpmPackage(pkg: {
       version: null,
       desc: pkg.desc || null,
       create_time: null,
-      last_publish: null,
+      last_publish_time: null,
+      unpublish_time: null,
       weekly_downloads: null,
       unpacked_size: null,
       file_count: null,
@@ -352,11 +362,24 @@ let npm_repository_parser = or([
   }),
   string(),
 ])
-let npmPackageDetailParser = object({
-  'name': string(),
-  'dist-tags': object({
-    latest: string(),
+let unpublish_npm_package_detail_parser = object({
+  name: string(),
+  time: object({
+    created: date(),
+    modified: optional(date()),
+    unpublished: object({
+      time: date(),
+      versions: array(string()),
+    }),
   }),
+})
+let published_npm_package_detail_parser = object({
+  'name': string(),
+  'dist-tags': optional(
+    object({
+      latest: string(),
+    }),
+  ),
   'versions': dict({
     key: string({ sampleValue: '0.0.1' }),
     value: object({
@@ -403,9 +426,19 @@ let npmPackageDetailParser = object({
     npm_repository_parser,
   ),
 })
+let npm_package_detail_parser = or([
+  unpublish_npm_package_detail_parser,
+  published_npm_package_detail_parser,
+])
 let packageTimeParser = object({
   modified: optional(date()),
   created: optional(date()),
+  unpublished: optional(
+    object({
+      time: date(),
+      versions: array(string()),
+    }),
+  ),
 })
 
 function saveJSON(filename: string, payload: string) {
@@ -418,7 +451,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let res = await fetch(url)
   let payload = await res.text()
   // saveJSON('npm.json', payload)
-  let pkg = npmPackageDetailParser.parse(JSON.parse(payload))
+  let _pkg = npm_package_detail_parser.parse(JSON.parse(payload))
+  let packageTime = packageTimeParser.parse(_pkg.time)
   let now = Date.now()
   db.transaction(() => {
     /* npm package page */
@@ -428,6 +462,18 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     page.update_time = now
 
     /* npm package */
+    if (
+      _pkg.time.unpublished &&
+      'time' in _pkg.time.unpublished &&
+      'versions' in _pkg.time.unpublished
+    ) {
+      if (npm_package.create_time != _pkg.time.created.getTime())
+        npm_package.create_time = _pkg.time.created.getTime()
+      if (npm_package.unpublish_time != _pkg.time.unpublished.time.getTime())
+        npm_package.unpublish_time = _pkg.time.unpublished.time.getTime()
+      return
+    }
+    let pkg = _pkg as ParseResult<typeof published_npm_package_detail_parser>
     let timeList = Object.entries(pkg.time)
       .map(([version, date]) => ({
         version,
@@ -435,7 +481,18 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       }))
       .sort((a, b) => b.publish_time - a.publish_time)
 
-    let version_name = pkg['dist-tags'].latest
+    let version_name = pkg['dist-tags']?.latest
+
+    if (!version_name && packageTime.unpublished) {
+      npm_package.unpublish_time = packageTime.unpublished.time.getTime()
+      return
+    }
+    if (!version_name) {
+      throw new Error(
+        `no latest version specified, npm package name: ${npm_package.name}`,
+      )
+    }
+
     let publish_time = pkg.time[version_name]?.getTime()
     let version = pkg.versions[version_name]
     if (!publish_time || !version)
@@ -443,7 +500,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         `failed to find npm package version detail, name: ${npm_package.name}, version: ${version_name}`,
       )
 
-    let packageTime = packageTimeParser.parse(pkg.time)
     let create_time = packageTime.created?.getTime() || null
 
     function findAuthor() {
@@ -467,8 +523,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     if (npm_package.version != version_name) npm_package.version = version_name
 
-    if (npm_package.last_publish != publish_time)
-      npm_package.last_publish = publish_time
+    if (npm_package.last_publish_time != publish_time)
+      npm_package.last_publish_time = publish_time
 
     function findUnpackedSize() {
       if (version.dist.unpackedSize) {

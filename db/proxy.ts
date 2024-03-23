@@ -140,7 +140,8 @@ export type NpmPackage = {
   version: null | string
   desc: null | string
   create_time: null | number
-  last_publish: null | number
+  last_publish_time: null | number
+  unpublish_time: null | number
   weekly_downloads: null | number
   unpacked_size: null | number
   file_count: null | number

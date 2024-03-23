@@ -157,7 +157,8 @@ name text
 version text NULL
 desc text NULL
 create_time integer NULL
-last_publish integer NULL
+last_publish_time integer NULL
+unpublish_time integer NULL
 weekly_downloads integer NULL
 unpacked_size integer NULL
 file_count integer NULL
@@ -184,7 +185,7 @@ type enum('prod','dev','peer','optional')
 
 
 # zoom: 1.000
-# view: (-42, 863)
+# view: (516, 1084)
 # text-bg: #6495ed
 # text-color: #000000
 # diagram-bg: #f5f5f5
