@@ -47,27 +47,30 @@ async function main() {
 
 async function collectPendingPages(page: GracefulPage) {
   let timer = startTimer('collect pending pages')
-  let pages = filter(proxy.page, { check_time: null })
-  timer.setEstimateProgress(pages.length)
-  for (let { id, url } of pages) {
-    if (
-      // e.g. "https://github.com/beenotung?page=1&tab=repositories"
-      url.startsWith('https://github.com/') &&
-      url.includes('&tab=repositories')
-    ) {
-      await checkGithubRepositories(page, url)
-    } else if (
-      // e.g. "https://github.com/beenotung/res-index"
-      url.startsWith('https://github.com/')
-    ) {
-      let repo = find(proxy.repo, { page_id: id! })
-      if (!repo)
-        throw new Error('failed to find repository from page, url: ' + url)
-      await collectGithubRepoDetails(page, repo)
-    } else {
-      throw new Error(`unsupported page, url: ${url}`)
+  for (;;) {
+    let pages = filter(proxy.page, { check_time: null })
+    if (pages.length == 0) break
+    timer.setEstimateProgress(pages.length)
+    for (let { id, url } of pages) {
+      if (
+        // e.g. "https://github.com/beenotung?page=1&tab=repositories"
+        url.startsWith('https://github.com/') &&
+        url.includes('&tab=repositories')
+      ) {
+        await checkGithubRepositories(page, url)
+      } else if (
+        // e.g. "https://github.com/beenotung/res-index"
+        url.startsWith('https://github.com/')
+      ) {
+        let repo = find(proxy.repo, { page_id: id! })
+        if (!repo)
+          throw new Error('failed to find repository from page, url: ' + url)
+        await collectGithubRepoDetails(page, repo)
+      } else {
+        throw new Error(`unsupported page, url: ${url}`)
+      }
+      timer.tick()
     }
-    timer.tick()
   }
   timer.end()
 }
