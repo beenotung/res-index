@@ -153,6 +153,8 @@ export type NpmPackage = {
   page?: Page
   download_page_id: number
   download_page?: Page
+  dependent_page_id: number
+  dependent_page?: Page
 }
 
 export type NpmPackageKeyword = {
@@ -245,6 +247,7 @@ export let proxy = proxySchema<DBProxy>({
       ['repo', { field: 'repo_id', table: 'repo' }],
       ['page', { field: 'page_id', table: 'page' }],
       ['download_page', { field: 'download_page_id', table: 'page' }],
+      ['dependent_page', { field: 'dependent_page_id', table: 'page' }],
     ],
     npm_package_keyword: [
       /* foreign references */

@@ -25,24 +25,24 @@ import { writeFileSync } from 'fs'
 // TODO continues updates each pages
 
 async function main() {
+  let browser = await chromium.launch({ headless: false })
+  let page = new GracefulPage({ from: browser })
   if (proxy.repo.length == 0 || proxy.npm_package.length == 0) {
-    await initialPopulate()
+    await initialPopulate(page)
   }
-  await populateNpmPackages()
+  await populateNpmPackages(page)
+  await page.close()
+  await browser.close()
   console.log('done.')
 }
 
-async function initialPopulate() {
-  let browser = await chromium.launch({ headless: false })
-  let page = new GracefulPage({ from: browser })
+async function initialPopulate(page: GracefulPage) {
   if (proxy.repo.length == 0) {
     await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
   }
   if (proxy.npm_package.length == 0) {
     await collectNpmPackages(page, { scope: 'beenotung' })
   }
-  await page.close()
-  await browser.close()
 }
 
 let select_new_npm_package_ids = db
@@ -55,7 +55,17 @@ where last_publish_time is null
   )
   .pluck()
 
-async function populateNpmPackages() {
+let select_unknown_dependent_npm_package_ids = db
+  .prepare(
+    /* sql */ `
+select npm_package.id from npm_package
+inner join page on page.id = npm_package.dependent_page_id
+where page.check_time is null
+`,
+  )
+  .pluck()
+
+async function populateNpmPackages(page: GracefulPage) {
   let timer = startTimer('populate npm packages')
   for (;;) {
     timer.next('populate npm package weekly-download')
@@ -80,7 +90,16 @@ async function populateNpmPackages() {
       timer.tick()
     }
 
-    if (list1.length == 0 && list2.length == 0) break
+    timer.next('select npm package dependent')
+    let list3 = select_unknown_dependent_npm_package_ids.all() as number[]
+    timer.setEstimateProgress(list3.length)
+    for (let id of list3) {
+      let npm_package = proxy.npm_package[id]
+      await collectNpmPackageDependents(page, npm_package.name)
+      timer.tick()
+    }
+
+    if (list1.length == 0 && list2.length == 0 && list3.length == 0) break
   }
   timer.end()
 }
@@ -322,6 +341,10 @@ function storeNpmPackage(pkg: {
   let download_page_url = `https://api.npmjs.org/downloads/point/last-week/${pkg.name}`
   let download_page_id = getPageId(download_page_url)
 
+  /* dependent page */
+  let dependent_page_url = `https://www.npmjs.com/browse/depended/${pkg.name}?offset=0`
+  let dependent_page_id = getPageId(dependent_page_url)
+
   /* npm package */
   let npm_package = find(proxy.npm_package, { name: pkg.name })
   if (!npm_package) {
@@ -341,6 +364,7 @@ function storeNpmPackage(pkg: {
       homepage: null,
       page_id: package_page_id,
       download_page_id,
+      dependent_page_id,
     })
     return id
   } else {
@@ -450,7 +474,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let url = page!.url
   let res = await fetch(url)
   let payload = await res.text()
-  // saveJSON('npm.json', payload)
+  saveJSON('npm.json', payload)
   let _pkg = npm_package_detail_parser.parse(JSON.parse(payload))
   let packageTime = packageTimeParser.parse(_pkg.time)
   let now = Date.now()
@@ -626,14 +650,108 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       }
       for (let name of names) {
         let dependency_package_id = storeNpmPackage({ name })
-        proxy.npm_package_dependency.push({
+        find(proxy.npm_package_dependency, {
           package_id: npm_package_id,
           dependency_id: dependency_package_id,
           type,
+        }) ||
+          proxy.npm_package_dependency.push({
+            package_id: npm_package_id,
+            dependency_id: dependency_package_id,
+            type,
+          })
+      }
+    }
+  })()
+}
+
+async function collectNpmPackageDependents(page: GracefulPage, name: string) {
+  let indexUrl = `https://www.npmjs.com/browse/depended/${name}?offset=0`
+  await checkNpmPackageDependents(page, indexUrl)
+}
+
+async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
+  await page.goto(indexUrl)
+  let res = await page.evaluate(() => {
+    let packages = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>('li a[href*="/package/"]'),
+      a => {
+        // e.g. "/package/webpack-dev-server"
+        let name = a.getAttribute('href')?.replace('/package/', '')
+        if (!name) throw new Error('failed to parse package name')
+        let section = a.closest('section')
+        if (!section)
+          throw new Error('failed to locate section of npm package dependent')
+        let scope = section
+          .querySelector('a[href*="/~"]')
+          ?.getAttribute('href')
+          ?.replace('/~', '')
+        if (!scope)
+          throw new Error(
+            'failed to parse scope (author) of npm package dependent',
+          )
+        let desc =
+          section.querySelector<HTMLParagraphElement>('p.lh-copy')?.innerText ||
+          null
+        return { scope, name, desc }
+      },
+    )
+    let link = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(
+        'a[href*="/browse/depended/"]',
+      ),
+    ).find(a => a.textContent == 'Next Page')
+    let nextHref = link?.href || null
+    return { packages, nextHref }
+  })
+  let indexPayload = JSON.stringify(res)
+  let now = Date.now()
+  db.transaction(() => {
+    /* index page */
+    let indexPage = find(proxy.page, { url: indexUrl })
+    if (!indexPage) {
+      proxy.page.push({
+        url: indexUrl,
+        payload: indexPayload,
+        check_time: now,
+        update_time: now,
+      })
+      storePackages()
+    } else {
+      indexPage.check_time = now
+      if (indexPage.payload != indexPayload) {
+        indexPage.payload = indexPayload
+        indexPage.update_time = now
+        storePackages()
+      }
+    }
+
+    /* next index page */
+    if (res.nextHref) {
+      let nextPage = find(proxy.page, { url: res.nextHref })
+      if (!nextPage) {
+        proxy.page.push({
+          url: res.nextHref,
+          payload: null,
+          check_time: null,
+          update_time: null,
+        })
+      }
+    }
+
+    function storePackages() {
+      for (let pkg of res.packages) {
+        storeNpmPackage({
+          scope: pkg.scope,
+          name: pkg.name,
+          desc: pkg.desc,
         })
       }
     }
   })()
+  if (res.nextHref) {
+    await checkNpmPackageDependents(page, res.nextHref)
+  }
 }
 
 let npmPackageDownloadsParser = or([
