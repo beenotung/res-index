@@ -28,26 +28,48 @@ import {
 async function main() {
   let browser = await chromium.launch({ headless: false })
   let page = new GracefulPage({ from: browser })
-  if (proxy.repo.length == 0 || proxy.npm_package.length == 0) {
-    await initialPopulate(page)
-  }
-  await collectGithubRepoDetails(
-    page,
-    find(proxy.repo, { name: 'ts-liveview' })!,
-  )
-  // await populateNpmPackages(page)
-  await page.close()
-  await browser.close()
-  console.log('done.')
-}
-
-async function initialPopulate(page: GracefulPage) {
   if (proxy.repo.length == 0) {
     await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
   }
   if (proxy.npm_package.length == 0) {
     await collectNpmPackages(page, { scope: 'beenotung' })
   }
+  // await collectGithubRepoDetails(
+  //   page,
+  //   find(proxy.repo, { name: 'ts-liveview' })!,
+  // )
+  // await populateNpmPackages(page)
+  await collectPendingPages(page)
+  await page.close()
+  await browser.close()
+  console.log('done.')
+}
+
+async function collectPendingPages(page: GracefulPage) {
+  let timer = startTimer('collect pending pages')
+  let pages = filter(proxy.page, { check_time: null })
+  timer.setEstimateProgress(pages.length)
+  for (let { id, url } of pages) {
+    if (
+      // e.g. "https://github.com/beenotung?page=1&tab=repositories"
+      url.startsWith('https://github.com/') &&
+      url.includes('&tab=repositories')
+    ) {
+      await checkGithubRepositories(page, url)
+    } else if (
+      // e.g. "https://github.com/beenotung/res-index"
+      url.startsWith('https://github.com/')
+    ) {
+      let repo = find(proxy.repo, { page_id: id! })
+      if (!repo)
+        throw new Error('failed to find repository from page, url: ' + url)
+      await collectGithubRepoDetails(page, repo)
+    } else {
+      throw new Error(`unsupported page, url: ${url}`)
+    }
+    timer.tick()
+  }
+  timer.end()
 }
 
 let select_new_npm_package_ids = db
@@ -118,6 +140,20 @@ async function collectGithubRepositories(
   },
 ) {
   let indexUrl = `https://github.com/${options.username}?page=${options.page}&tab=repositories`
+  let res = await checkGithubRepositories(page, indexUrl)
+  if (res.nextUrl) {
+    await collectGithubRepositories(page, {
+      username: options.username,
+      page: options.page + 1,
+    })
+  }
+}
+async function checkGithubRepositories(
+  page: GracefulPage,
+  /** @example "https://github.com/beenotung?page=1&tab=repositories" */
+  indexUrl: string,
+) {
+  let username = new URL(indexUrl).pathname.replace('/', '')
   await page.goto(indexUrl)
   let res = await page.evaluate(() => {
     let repos = Array.from(
@@ -214,7 +250,7 @@ async function collectGithubRepositories(
           let parts = repoData.url.split('/')
           let name = parts.pop() || parts.pop()!
           let id = proxy.repo.push({
-            author_id: getAuthorId(options.username),
+            author_id: getAuthorId(username),
             name,
             is_fork: repoData.is_fork,
             url: repoData.url,
@@ -251,12 +287,7 @@ async function collectGithubRepositories(
       }
     }
   })()
-  if (res.nextUrl) {
-    await collectGithubRepositories(page, {
-      username: options.username,
-      page: options.page + 1,
-    })
-  }
+  return res
 }
 
 let nullable_int = nullable(int({ min: 0 }))
