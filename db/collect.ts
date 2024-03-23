@@ -38,7 +38,6 @@ async function main() {
   //   page,
   //   find(proxy.repo, { name: 'ts-liveview' })!,
   // )
-  // await populateNpmPackages(page)
   await collectPendingPages(page)
   await page.close()
   await browser.close()
@@ -95,65 +94,6 @@ async function collectPendingPages(page: GracefulPage) {
       }
       timer.tick()
     }
-  }
-  timer.end()
-}
-
-let select_new_npm_package_ids = db
-  .prepare(
-    /* sql */ `
-select id from npm_package
-where last_publish_time is null
-  and unpublish_time is null
-`,
-  )
-  .pluck()
-
-let select_unknown_dependent_npm_package_ids = db
-  .prepare(
-    /* sql */ `
-select npm_package.id from npm_package
-inner join page on page.id = npm_package.dependent_page_id
-where page.check_time is null
-`,
-  )
-  .pluck()
-
-async function populateNpmPackages(page: GracefulPage) {
-  let timer = startTimer('populate npm packages')
-  for (;;) {
-    timer.next('populate npm package weekly-download')
-    let list1 = filter(proxy.npm_package, {
-      weekly_downloads: null,
-    })
-    timer.setEstimateProgress(list1.length)
-    for (let npm_package of list1) {
-      // TODO mark and skip private packages
-      if (!npm_package.download_page!.check_time) {
-        await collectNpmPackageDownloads(npm_package)
-      }
-      timer.tick()
-    }
-
-    timer.next('populate npm package detail')
-    let list2 = select_new_npm_package_ids.all() as number[]
-    timer.setEstimateProgress(list2.length)
-    for (let id of list2) {
-      let npm_package = proxy.npm_package[id]
-      await collectNpmPackageDetail(npm_package)
-      timer.tick()
-    }
-
-    timer.next('select npm package dependent')
-    let list3 = select_unknown_dependent_npm_package_ids.all() as number[]
-    timer.setEstimateProgress(list3.length)
-    for (let id of list3) {
-      let npm_package = proxy.npm_package[id]
-      await collectNpmPackageDependents(page, npm_package.name)
-      timer.tick()
-    }
-
-    if (list1.length == 0 && list2.length == 0 && list3.length == 0) break
   }
   timer.end()
 }
