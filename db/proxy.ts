@@ -107,15 +107,20 @@ export type Author = {
 
 export type Repo = {
   id?: null | number
-  name: string
   author_id: number
   author?: Author
+  name: string
   is_fork: boolean
   url: string
   desc: null | string
   programming_language_id: null | number
   programming_language?: ProgrammingLanguage
   website: null | string
+  stars: null | number
+  watchers: null | number
+  forks: null | number
+  readme: null | string
+  last_commit: null | number
   page_id: number
   page?: Page
 }
@@ -150,6 +155,7 @@ export type NpmPackage = {
   repo_id: null | number
   repo?: Repo
   homepage: null | string
+  readme: null | string
   page_id: number
   page?: Page
   download_page_id: number

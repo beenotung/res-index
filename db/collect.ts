@@ -1,9 +1,12 @@
+import { chromium } from 'playwright'
+import { DAY } from '@beenotung/tslib/time'
+import { db } from './db'
 import { del, filter, find } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
-import { chromium } from 'playwright'
-import { NpmPackage, proxy, NpmPackageDependency } from './proxy'
-import { db } from './db'
 import { later } from '@beenotung/tslib/async/wait'
+import { NpmPackage, NpmPackageDependency, proxy, Repo } from './proxy'
+import { startTimer } from '@beenotung/tslib/timer'
+import { writeFileSync } from 'fs'
 import {
   ParseResult,
   Parser,
@@ -12,14 +15,12 @@ import {
   dateString,
   dict,
   int,
+  nullable,
   object,
   optional,
   or,
   string,
 } from 'cast.ts'
-import { DAY } from '@beenotung/tslib/time'
-import { startTimer } from '@beenotung/tslib/timer'
-import { writeFileSync } from 'fs'
 
 // TODO get repo details
 // TODO continues updates each pages
@@ -30,7 +31,11 @@ async function main() {
   if (proxy.repo.length == 0 || proxy.npm_package.length == 0) {
     await initialPopulate(page)
   }
-  await populateNpmPackages(page)
+  await collectGithubRepoDetails(
+    page,
+    find(proxy.repo, { name: 'ts-liveview' })!,
+  )
+  // await populateNpmPackages(page)
   await page.close()
   await browser.close()
   console.log('done.')
@@ -216,6 +221,11 @@ async function collectGithubRepositories(
             desc,
             programming_language_id,
             website: null,
+            stars: null,
+            watchers: null,
+            forks: null,
+            readme: null,
+            last_commit: null,
             page_id: repoPage.id!,
           })
           repo = proxy.repo[id]
@@ -247,6 +257,142 @@ async function collectGithubRepositories(
       page: options.page + 1,
     })
   }
+}
+
+let nullable_int = nullable(int({ min: 0 }))
+let nullable_date = nullable(date())
+
+async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
+  // e.g. "https://github.com/beenotung/ts-liveview"
+  await page.goto(repo.url)
+  // FIXME handle case when the repo doesn't have any commits
+  await (
+    await page.getPage()
+  ).waitForSelector('[data-testid="latest-commit-details"] relative-time')
+  let res = await page.evaluate(() => {
+    let p = document.querySelector<HTMLParagraphElement>('.Layout-sidebar h2+p')
+    let desc =
+      p?.previousElementSibling?.textContent == 'About' ? p.innerText : null
+
+    let website =
+      Array.from(
+        document.querySelectorAll<HTMLAnchorElement>(
+          '.Layout-sidebar a.text-bold[role="link"]',
+        ),
+        a => a.href,
+      ).find(href => href) || null
+
+    let topics = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(
+        // e.g. "/topics/typescript"
+        '.Layout-sidebar a.topic-tag[href*="/topics/"]',
+      ),
+      a => a.innerText,
+    )
+
+    let stars =
+      document.querySelector(
+        // e.g. "/beenotung/ts-liveview/stargazers"
+        `.Layout-sidebar a[href="${location.pathname}/stargazers"] strong`,
+      )?.textContent || null
+
+    let watchers =
+      document.querySelector(
+        // e.g. "/beenotung/ts-liveview/watchers"
+        `.Layout-sidebar a[href="${location.pathname}/watchers"] strong`,
+      )?.textContent || null
+
+    let forks =
+      document.querySelector(
+        // e.g. "/beenotung/ts-liveview/forks"
+        `.Layout-sidebar a[href="${location.pathname}/forks"] strong`,
+      )?.textContent || null
+
+    let programming_language =
+      document.querySelector(
+        // e.g. "/beenotung/ts-liveview/search?l=typescript"
+        `.Layout-sidebar a[href*="${location.pathname}/search?l="] .text-bold`,
+      )?.textContent || null
+
+    let last_commit =
+      document
+        .querySelector<HTMLTimeElement>(
+          '[data-testid="latest-commit-details"] relative-time',
+        )
+        ?.getAttribute('datetime') || null
+
+    let readme =
+      document.querySelector<HTMLElement>(
+        '.Layout-main article[itemprop="text"]',
+      )?.innerText || null
+
+    return {
+      desc,
+      website,
+      topics,
+      stars,
+      watchers,
+      forks,
+      programming_language,
+      last_commit,
+      readme,
+    }
+  })
+
+  let payload = JSON.stringify(res)
+  let now = Date.now()
+  // saveJSON('repo.json', payload)
+  db.transaction(() => {
+    /* repo page */
+    let page = repo.page!
+    page.check_time = now
+    if (page.payload == payload) return
+    page.payload = payload
+    page.update_time = now
+
+    /* repo */
+    let repo_id = repo.id!
+    if (repo.desc != res.desc) repo.desc = res.desc
+    if (repo.website != res.website) repo.website = res.website
+
+    let stars = nullable_int.parse(res.stars)
+    if (repo.stars != stars) repo.stars = stars
+
+    let watchers = nullable_int.parse(res.watchers)
+    if (repo.watchers != watchers) repo.watchers = watchers
+
+    let forks = nullable_int.parse(res.forks)
+    if (repo.forks != forks) repo.forks = forks
+
+    let programming_language_id = !res.programming_language
+      ? null
+      : find(proxy.programming_language, {
+          name: res.programming_language,
+        })?.id ||
+        proxy.programming_language.push({
+          name: res.programming_language,
+        })
+    if (repo.programming_language_id != programming_language_id)
+      repo.programming_language_id = programming_language_id
+
+    let last_commit = nullable_date.parse(res.last_commit)?.getTime() || null
+    if (repo.last_commit != last_commit) repo.last_commit = last_commit
+
+    if (repo.readme != res.readme) repo.readme = res.readme
+
+    /* repo tags */
+    for (let row of filter(proxy.repo_keyword, { repo_id })) {
+      if (!res.topics.includes(row.keyword!.name)) {
+        delete proxy.repo_keyword[row.id!]
+      }
+    }
+    for (let name of res.topics) {
+      let keyword_id =
+        find(proxy.keyword, { name })?.id || proxy.keyword.push({ name })
+      find(proxy.repo_keyword, { repo_id, keyword_id }) ||
+        proxy.repo_keyword.push({ repo_id, keyword_id })
+    }
+  })()
 }
 
 async function collectNpmPackages(
@@ -365,6 +511,7 @@ function storeNpmPackage(pkg: {
       repository: null,
       repo_id: null,
       homepage: null,
+      readme: null,
       page_id: package_page_id,
       download_page_id,
       dependent_page_id,
@@ -452,6 +599,7 @@ let published_npm_package_detail_parser = object({
   'repository': optional<ParseResult<typeof npm_repository_parser>>(
     npm_repository_parser,
   ),
+  'readme': optional(string()),
 })
 let npm_package_detail_parser = or([
   unpublish_npm_package_detail_parser,
@@ -477,7 +625,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let url = page!.url
   let res = await fetch(url)
   let payload = await res.text()
-  saveJSON('npm.json', payload)
+  // saveJSON('npm.json', payload)
   let _pkg = npm_package_detail_parser.parse(JSON.parse(payload))
   let packageTime = packageTimeParser.parse(_pkg.time)
   let now = Date.now()
@@ -610,6 +758,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     let homepage = pkg.homepage || null
     if (npm_package.homepage != homepage) npm_package.homepage = homepage
+
+    let readme = pkg.readme || null
+    if (npm_package.readme != readme) npm_package.readme = readme
 
     let npm_package_id = npm_package.id!
 

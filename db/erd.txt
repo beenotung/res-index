@@ -134,6 +134,11 @@ url text unique
 desc text NULL
 programming_language_id integer NULL FK >0- programming_language.id
 website text NULL
+stars integer NULL
+watchers integer NULL
+forks integer NULL
+readme text NULL
+last_commit integer NULL
 page_id integer FK >0- page.id
 
 
@@ -166,6 +171,7 @@ file_count integer NULL
 repository text NULL
 repo_id integer NULL FK >0- repo.id
 homepage text NULL
+readme text NULL
 page_id integer FK >0- page.id
 download_page_id integer FK >0- page.id
 dependent_page_id integer FK >0- page.id
