@@ -15,6 +15,7 @@ import {
   dateString,
   dict,
   int,
+  literal,
   nullable,
   object,
   optional,
@@ -614,9 +615,13 @@ let published_npm_package_detail_parser = object({
   ),
   'readme': optional(string()),
 })
+let not_found_npm_package_detail_parser = object({
+  error: literal('Not found'),
+})
 let npm_package_detail_parser = or([
   unpublish_npm_package_detail_parser,
   published_npm_package_detail_parser,
+  not_found_npm_package_detail_parser,
 ])
 let packageTimeParser = object({
   modified: optional(date()),
@@ -640,7 +645,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let payload = await res.text()
   // saveJSON('npm.json', payload)
   let _pkg = npm_package_detail_parser.parse(JSON.parse(payload))
-  let packageTime = packageTimeParser.parse(_pkg.time)
   let now = Date.now()
   db.transaction(() => {
     /* npm package page */
@@ -648,6 +652,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (page.payload == payload) return
     page.payload = payload
     page.update_time = now
+
+    if ('error' in _pkg) return
+
+    let packageTime = packageTimeParser.parse(_pkg.time)
 
     /* npm package */
     if (
