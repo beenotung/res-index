@@ -98,6 +98,11 @@ async function collectPendingPages(page: GracefulPage) {
         if (res == 'rate limited') {
           dependent_rate_limited = true
         }
+      } else if (find(proxy.repo, { page_id: id! })) {
+        // e.g. "https://gitlab.com/plade/sdks/js"
+        // e.g. "https://git.reyah.ga/reyah/libraries/reyah-oauth-provider"
+        // TODO handle gitlab
+        continue
       } else {
         throw new Error(`unsupported page, url: ${url}`)
       }
@@ -269,7 +274,6 @@ async function checkGithubRepositories(
 let nullable_int = nullable(int({ min: 0 }))
 let nullable_date = nullable(date())
 
-// TODO handle gitlab
 // FIXME handle case when it is private or deleted
 async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"

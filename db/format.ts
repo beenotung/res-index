@@ -1,4 +1,8 @@
 export function cleanRepoUrl(url: string): string | null {
+  if (url == 'TBC') {
+    return null
+  }
+
   url = url
     .replace(/\/^/, '')
     .replace(/\.git$/, '')
@@ -46,8 +50,9 @@ export function cleanRepoUrl(url: string): string | null {
   }
 
   // e.g. "https://gitlab.com/plade/sdks/js"
-  if (parts.length > 5 && parts[2] != 'gitlab.com') {
-    throw new Error('Invalid repository url: ' + url)
+  // e.g. "https://git.reyah.ga/reyah/libraries/reyah-oauth-provider"
+  if (parts.length > 5) {
+    // throw new Error('Invalid repository url: ' + url)
   }
 
   url = parts.join('/')
