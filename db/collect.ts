@@ -775,7 +775,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         ? pkg.repository
         : pkg.repository?.url || null
     if (!repository && typeof pkg.repository == 'object') {
-      if (pkg.bugs?.url) {
+      if (pkg.repository.url == '') {
+        // seems to be intentionally removed
+        // e.g. npm package: "@silent-killer/killer-spotify-searching"
+      } else if (pkg.bugs?.url) {
         // e.g. "https://github.com/azawakh/twsh/issue"
         repository = pkg.bugs.url
         if (repository.split('/').length == 6) {
