@@ -110,7 +110,7 @@ export type Repo = {
   author_id: number
   author?: Author
   name: string
-  is_fork: boolean
+  is_fork: null | boolean
   url: string
   desc: null | string
   programming_language_id: null | number

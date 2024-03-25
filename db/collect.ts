@@ -803,7 +803,36 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       let repo_name = repo_url_parts[4]
 
       let repo = find(proxy.repo, { url: repository_url })
-      if (repo && repo.id != npm_package.repo_id) {
+      if (!repo) {
+        let repo_author_id =
+          find(proxy.author, { username: repo_username })?.id ||
+          proxy.author.push({ username: repo_username })
+        let repo_page_id =
+          find(proxy.page, { url: repository_url })?.id ||
+          proxy.page.push({
+            url: repository_url,
+            payload: null,
+            check_time: null,
+            update_time: null,
+          })
+        let repo_id = proxy.repo.push({
+          author_id: repo_author_id,
+          name: repo_name,
+          is_fork: null,
+          url: repository_url,
+          desc: null,
+          programming_language_id: null,
+          website: null,
+          stars: null,
+          watchers: null,
+          forks: null,
+          readme: null,
+          last_commit: null,
+          page_id: repo_page_id,
+        })
+        repo = proxy.repo[repo_id]
+      }
+      if (repo.id != npm_package.repo_id) {
         npm_package.repo_id = repo.id!
       }
     }
