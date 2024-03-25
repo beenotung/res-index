@@ -22,8 +22,9 @@ import {
   or,
   string,
 } from 'cast.ts'
+import { cleanRepoUrl, parseRepoUrl } from './format'
 
-// TODO get repo details
+// TODO get repo list from username (npm package > repo > username > repo list)
 // TODO continues updates each pages
 
 async function main() {
@@ -268,6 +269,8 @@ async function checkGithubRepositories(
 let nullable_int = nullable(int({ min: 0 }))
 let nullable_date = nullable(date())
 
+// TODO handle gitlab
+// FIXME handle case when it is private or deleted
 async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"
   await page.goto(repo.url)
@@ -651,7 +654,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let url = page!.url
   let res = await fetch(url)
   let payload = await res.text()
-  // saveJSON('npm.json', payload)
+  saveJSON('npm.json', payload)
   let _pkg = npm_package_detail_parser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
@@ -763,72 +766,40 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       npm_package.file_count = file_count
 
     // e.g. "https://github.com/beenotung/zstd.ts"
-    let repository_url =
+    let repository =
       typeof pkg.repository == 'string'
         ? pkg.repository
         : pkg.repository?.url || null
-    if (!repository_url && typeof pkg.repository == 'object') {
+    if (!repository && typeof pkg.repository == 'object') {
       if (pkg.bugs?.url) {
         // e.g. "https://github.com/azawakh/twsh/issue"
-        repository_url = pkg.bugs.url
+        repository = pkg.bugs.url
+        if (repository.split('/').length == 6) {
+          repository = repository.replace(/\/issue$/, '')
+        }
       } else {
         throw new Error(
           'failed to find npm package repository url, name: ' + pkg.name,
         )
       }
     }
-    if (repository_url?.startsWith('git+https://')) {
-      // e.g. "git+https://github.com/beenotung/better-sqlite3-schema.git"
-      repository_url = repository_url
-        .replace('git+https://', 'https://')
-        .replace(/\.git$/, '')
-    } else if (repository_url?.startsWith('git://')) {
-      // e.g. "git://github.com/beenotung/erlang.js.git"
-      repository_url = repository_url
-        .replace('git://', 'https://')
-        .replace(/\.git$/, '')
-    }
-    if (repository_url) {
-      // e.g. [ 'https:', '', 'github.com', 'beenotung', 'zstd.ts' ]
-      // e.g. [ 'https:', '', 'github.com', 'azawakh', 'twsh', 'issue' ]
-      let repo_url_parts = repository_url.split('/')
-      if (repo_url_parts.length == 6 && repo_url_parts[5] == 'issue') {
-        repo_url_parts.pop()
-        repository_url = repo_url_parts.join('/')
-      }
-      if (repo_url_parts.length != 5) {
-        throw new Error('Invalid npm package repository url: ' + repository_url)
-      }
-      if (repo_url_parts[0] != 'https') {
-        // e.g. git over ssh
-        throw new Error('Invalid npm package repository url: ' + repository_url)
-      }
-    }
-    if (repository_url?.endsWith('.git')) {
-      // e.g. "https://github.com/shadowprompt/daozhao_utils.git"
-      throw new Error(
-        'is .git really mandatory?, npm package repository url: ' +
-          repository_url,
-      )
-    }
-    if (npm_package.repository != repository_url)
-      npm_package.repository = repository_url
+    let repo_url = repository ? cleanRepoUrl(repository) : null
 
-    if (repository_url) {
-      // e.g. [ 'https:', '', 'github.com', 'beenotung', 'zstd.ts' ]
-      let repo_url_parts = repository_url.split('/')
-      let repo_username = repo_url_parts[3]
-      let repo_name = repo_url_parts[4]
+    if (npm_package.repository != repository)
+      npm_package.repository = repository
 
-      let repo = find(proxy.repo, { url: repository_url })
+    if (repo_url) {
+      let { username: repo_username, name: repo_name } = parseRepoUrl(repo_url)
+
+      let repo = find(proxy.repo, { url: repo_url })
       if (!repo) {
         let repo_author_id =
           find(proxy.author, { username: repo_username })?.id ||
           proxy.author.push({ username: repo_username })
         let repo_page_id =
-          find(proxy.page, { url: repository_url })?.id ||
+          find(proxy.page, { url: repo_url })?.id ||
           proxy.page.push({
-            url: repository_url,
+            url: repo_url,
             payload: null,
             check_time: null,
             update_time: null,
@@ -837,7 +808,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
           author_id: repo_author_id,
           name: repo_name,
           is_fork: null,
-          url: repository_url,
+          url: repo_url,
           desc: null,
           programming_language_id: null,
           website: null,
