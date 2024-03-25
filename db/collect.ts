@@ -762,12 +762,14 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.file_count != file_count)
       npm_package.file_count = file_count
 
+    // e.g. "https://github.com/beenotung/zstd.ts"
     let repository_url =
       typeof pkg.repository == 'string'
         ? pkg.repository
         : pkg.repository?.url || null
     if (!repository_url && typeof pkg.repository == 'object') {
       if (pkg.bugs?.url) {
+        // e.g. "https://github.com/azawakh/twsh/issue"
         repository_url = pkg.bugs.url
       } else {
         throw new Error(
@@ -777,28 +779,44 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     }
     if (repository_url?.startsWith('git+https://')) {
       // e.g. "git+https://github.com/beenotung/better-sqlite3-schema.git"
-      repository_url = repository_url.replace('git+https://', 'https://')
+      repository_url = repository_url
+        .replace('git+https://', 'https://')
+        .replace(/\.git$/, '')
     } else if (repository_url?.startsWith('git://')) {
       // e.g. "git://github.com/beenotung/erlang.js.git"
       repository_url = repository_url
         .replace('git://', 'https://')
         .replace(/\.git$/, '')
     }
-    if (npm_package.repository != repository_url)
-      npm_package.repository = repository_url
-
-    // e.g. "https://github.com/beenotung/zstd.ts"
-    // e.g. "https://github.com/azawakh/twsh/issue"
     if (repository_url) {
       // e.g. [ 'https:', '', 'github.com', 'beenotung', 'zstd.ts' ]
       // e.g. [ 'https:', '', 'github.com', 'azawakh', 'twsh', 'issue' ]
       let repo_url_parts = repository_url.split('/')
       if (repo_url_parts.length == 6 && repo_url_parts[5] == 'issue') {
         repo_url_parts.pop()
+        repository_url = repo_url_parts.join('/')
       }
       if (repo_url_parts.length != 5) {
-        throw new Error('Invalid repository url: ' + repository_url)
+        throw new Error('Invalid npm package repository url: ' + repository_url)
       }
+      if (repo_url_parts[0] != 'https') {
+        // e.g. git over ssh
+        throw new Error('Invalid npm package repository url: ' + repository_url)
+      }
+    }
+    if (repository_url?.endsWith('.git')) {
+      // e.g. "https://github.com/shadowprompt/daozhao_utils.git"
+      throw new Error(
+        'is .git really mandatory?, npm package repository url: ' +
+          repository_url,
+      )
+    }
+    if (npm_package.repository != repository_url)
+      npm_package.repository = repository_url
+
+    if (repository_url) {
+      // e.g. [ 'https:', '', 'github.com', 'beenotung', 'zstd.ts' ]
+      let repo_url_parts = repository_url.split('/')
       let repo_username = repo_url_parts[3]
       let repo_name = repo_url_parts[4]
 
