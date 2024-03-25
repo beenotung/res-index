@@ -544,9 +544,12 @@ function storeNpmPackage(pkg: {
 let npm_repository_parser = or([
   object({
     type: optional(string({ sampleValue: 'git' })),
-    url: string({
-      sampleValue: 'git+https://github.com/beenotung/better-sqlite3-schema.git',
-    }),
+    url: optional(
+      string({
+        sampleValue:
+          'git+https://github.com/beenotung/better-sqlite3-schema.git',
+      }),
+    ),
   }),
   string(),
 ])
@@ -612,6 +615,11 @@ let published_npm_package_detail_parser = object({
   'keywords': optional(array(string())),
   'repository': optional<ParseResult<typeof npm_repository_parser>>(
     npm_repository_parser,
+  ),
+  'bugs': optional(
+    object({
+      url: string({ sampleValue: 'https://github.com/azawakh/twsh/issue' }),
+    }),
   ),
   'readme': optional(string()),
 })
@@ -758,6 +766,15 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       typeof pkg.repository == 'string'
         ? pkg.repository
         : pkg.repository?.url || null
+    if (!repository_url && typeof pkg.repository == 'object') {
+      if (pkg.bugs?.url) {
+        repository_url = pkg.bugs.url
+      } else {
+        throw new Error(
+          'failed to find npm package repository url, name: ' + pkg.name,
+        )
+      }
+    }
     if (repository_url?.startsWith('git+https://')) {
       // e.g. "git+https://github.com/beenotung/better-sqlite3-schema.git"
       repository_url = repository_url.replace('git+https://', 'https://')
@@ -770,7 +787,21 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.repository != repository_url)
       npm_package.repository = repository_url
 
+    // e.g. "https://github.com/beenotung/zstd.ts"
+    // e.g. "https://github.com/azawakh/twsh/issue"
     if (repository_url) {
+      // e.g. [ 'https:', '', 'github.com', 'beenotung', 'zstd.ts' ]
+      // e.g. [ 'https:', '', 'github.com', 'azawakh', 'twsh', 'issue' ]
+      let repo_url_parts = repository_url.split('/')
+      if (repo_url_parts.length == 6 && repo_url_parts[5] == 'issue') {
+        repo_url_parts.pop()
+      }
+      if (repo_url_parts.length != 5) {
+        throw new Error('Invalid repository url: ' + repository_url)
+      }
+      let repo_username = repo_url_parts[3]
+      let repo_name = repo_url_parts[4]
+
       let repo = find(proxy.repo, { url: repository_url })
       if (repo && repo.id != npm_package.repo_id) {
         npm_package.repo_id = repo.id!
