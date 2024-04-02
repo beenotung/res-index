@@ -2,10 +2,56 @@ import { find, seedRow } from 'better-sqlite3-proxy'
 import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
+import { readdirSync } from 'fs'
+import { join } from 'path'
+import { env } from 'process'
+import { homedir } from 'os'
 
 // This file serve like the knex seed file.
 //
 // You can setup the database with initial config and sample data via the db proxy.
+
+function seed_sample_data() {
+  proxy.author[1] = { username: 'beenotung' }
+
+  proxy.programming_language[1] = { name: 'typescript' }
+
+  let repo_id = 0
+  function seedRepo(name: string) {
+    repo_id++
+    proxy.page[repo_id] = {
+      url: 'https://github.com/beenotung/' + name,
+      payload: null,
+      check_time: null,
+      update_time: null,
+    }
+    proxy.repo[repo_id] = {
+      author_id: 1,
+      name: name,
+      is_fork: false,
+      url: 'https://github.com/beenotung/' + name,
+      desc: 'stub',
+      programming_language_id: 1,
+      website: null,
+      stars: null,
+      watchers: null,
+      forks: null,
+      readme: null,
+      last_commit: null,
+      page_id: repo_id,
+    }
+  }
+
+  let names = readdirSync(
+    join(homedir(), 'workspace', 'github.com', 'beenotung'),
+  )
+  for (let name of names) {
+    seedRepo(name)
+  }
+}
+if (proxy.repo.length == 0) {
+  seed_sample_data()
+}
 
 function fix_npm_detail() {
   let prefix = 'https://www.npmjs.com/package/'
