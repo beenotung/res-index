@@ -44,17 +44,24 @@ function Page(attrs: {}, context: DynamicContext) {
   let keyword = params.get('keyword') || ''
   let bindings = []
   let sql = /* sql */ `
-select repo.id
+select id
 from repo
-inner join author on author.id = repo.author_id
 where true
 `
   for (let part of keyword.split(' ')) {
-    sql += /* sql */ `
- and (repo.name like ? or author.username like ?)
+    if (!part) continue
+    if (part[0] == '-') {
+      part = part.slice(1)
+      sql += /* sql */ `
+ and (url not like ?)
 `
+    } else {
+      sql += /* sql */ `
+ and (url like ?)
+`
+    }
     part = '%' + part + '%'
-    bindings.push(part, part)
+    bindings.push(part)
   }
   let repos = db
     .prepare(sql)
@@ -67,16 +74,33 @@ where true
     [
       <p>{repos.length} matches</p>,
       <div class="list">
-        {mapArray(repos, repo => (
-          <div class="repo">
-            <div>
-              <b>{repo.name}</b> <sub>by {repo.author!.username}</sub>
+        {mapArray(repos, repo => {
+          let language = repo.programming_language?.name
+          switch (language) {
+            case 'Typescript':
+              language = <span>[TS]</span>
+              break
+            case 'Javascript':
+              language = <span>[JS]</span>
+              break
+            case undefined:
+              break
+            default:
+              language = <span>[{language}]</span>
+              break
+          }
+          return (
+            <div class="repo">
+              <div>
+                {language} <b>{repo.name}</b>{' '}
+                <sub>by {repo.author!.username}</sub>
+              </div>
+              <a target="_blank" href={repo.url}>
+                {repo.url}
+              </a>
             </div>
-            <a target="_blank" href={repo.url}>
-              {repo.url}
-            </a>
-          </div>
-        ))}
+          )
+        })}
       </div>,
     ],
   ]
