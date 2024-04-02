@@ -39,20 +39,27 @@ let content = (
   </div>
 )
 
-let select_repo = db
-  .prepare(
-    /* sql */ `
-select id from repo
-where name like :keyword
-`,
-  )
-  .pluck()
-
 function Page(attrs: {}, context: DynamicContext) {
   let params = new URLSearchParams(context.routerMatch?.search)
   let keyword = params.get('keyword') || ''
-  let repos = select_repo
-    .all({ keyword: '%' + keyword + '%' })
+  let bindings = []
+  let sql = /* sql */ `
+select repo.id
+from repo
+inner join author on author.id = repo.author_id
+where true
+`
+  for (let part of keyword.split(' ')) {
+    sql += /* sql */ `
+ and (repo.name like ? or author.username like ?)
+`
+    part = '%' + part + '%'
+    bindings.push(part, part)
+  }
+  let repos = db
+    .prepare(sql)
+    .pluck()
+    .all(bindings)
     .map((id: any) => proxy.repo[id])
   let result: VElement = [
     'div#result',
