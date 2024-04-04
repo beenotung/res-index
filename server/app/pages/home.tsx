@@ -24,6 +24,18 @@ let style = Style(/* css */ `
 .repo {
   padding: 0.25rem;
 }
+label {
+  display: block;
+  width: 100%;
+  text-align: end;
+}
+.hint {
+  border-inline-start: 3px solid #748;
+  background-color: #edf;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  width: fit-content;
+}
 `)
 
 let script = Script(/* javascript */ `
@@ -43,8 +55,15 @@ let content = (
 function Page(attrs: {}, context: DynamicContext) {
   let params = new URLSearchParams(context.routerMatch?.search)
   let action = params.get('action')
-  let keyword = params.get('keyword') || ''
+  let host = params.get('host')
+  let username = params.get('username')
+  let name = params.get('name')
+
+  let keyword = [host, username, name].join(' ')
+
   let bindings: Record<string, string> = {}
+  let bindCount = 0
+
   let sql = /* sql */ `
 select repo.id
 from repo
@@ -52,28 +71,41 @@ inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
 where true
 `
-  let bindCount = 0
-  for (let part of keyword.split(' ')) {
-    if (!part) continue
-    bindCount++
-    let bind = ':b' + bindCount
-    if (part[0] == '-') {
-      part = part.slice(1)
-      sql += /* sql */ `
-  and not (repo.name like ${bind} or author.username like ${bind} or domain.host like ${bind})
+
+  let qs: [string | null, string][] = [
+    [host, 'domain.host'],
+    [username, 'author.username'],
+    [name, 'repo.name'],
+  ]
+  for (let [value, field] of qs) {
+    if (value) {
+      for (let part of value.split(' ')) {
+        bindCount++
+        let bind = 'b' + bindCount
+        if (part[0] == '-') {
+          part = part.slice(1)
+          sql += /* sql */ `
+  and ${field} not like :${bind}
 `
-    } else {
-      sql += /* sql */ `
-  and (repo.name like ${bind} or author.username like ${bind} or domain.host like ${bind})
+        } else {
+          sql += /* sql */ `
+  and ${field} like :${bind}
 `
+        }
+        bindings[bind] = '%' + part + '%'
+      }
     }
-    bindings['b' + bindCount] = '%' + part + '%'
   }
+
   let repos = db
     .prepare(sql)
     .pluck()
     .all(bindings)
     .map((id: any) => proxy.repo[id])
+
+  if (repos.length > 36) {
+  }
+
   let result: VElement = [
     'div#result',
     {},
@@ -103,10 +135,53 @@ where true
   return (
     <form onsubmit="emitForm(event)" id="searchForm">
       <input name="action" value="search" hidden />
-      <label>
-        Keyword: <input name="keyword" value={keyword} />
-      </label>{' '}
+      <table>
+        <tbody>
+          {mapArray(
+            [
+              [
+                'Repo host',
+                <input name="host" placeholder="e.g. github" value={host} />,
+              ],
+              [
+                'Username',
+                <input
+                  name="username"
+                  placeholder="e.g. beeno"
+                  value={username}
+                />,
+              ],
+              [
+                'Repo name',
+                <input
+                  name="name"
+                  placeholder={'e.g. "react event"'}
+                  value={name}
+                />,
+              ],
+            ],
+            ([label, input]) => (
+              <tr>
+                <td>
+                  <label>{label}: </label>
+                </td>
+                <td>{input}</td>
+              </tr>
+            ),
+          )}
+        </tbody>
+      </table>
       <input type="submit" value="Search" />
+      <p class="hint">
+        Hint: you can search by multiple keywords, separated by space, e.g.
+        "react event" as searching for repos containing "react" and "event" in
+        the name (appearing any order).
+      </p>
+      <p class="hint">
+        Hint: you can indicate negative keywords with hyphen prefix, e.g.
+        "-react -ng- chart" as searching for "chart" libraries while excluding
+        those framework-specific libraries having "react" or "ng-" in the name.
+      </p>
       {result}
     </form>
   )
