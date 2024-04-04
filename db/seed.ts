@@ -1,4 +1,4 @@
-import { find, seedRow } from 'better-sqlite3-proxy'
+import { filter, find, seedRow } from 'better-sqlite3-proxy'
 import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
@@ -62,6 +62,8 @@ function seed_sample_data() {
       for (let repo of repos) {
         let repo_dir = join(user_dir, repo)
         if (!statSync(repo_dir).isDirectory()) continue
+        let domain_id =
+          find(proxy.domain, { host })?.id || proxy.domain.push({ host })
         repo_id++
         let url = `https://${host}/${username}/${repo}`
         proxy.page[repo_id] = {
@@ -71,6 +73,7 @@ function seed_sample_data() {
           update_time: null,
         }
         proxy.repo[repo_id] = {
+          domain_id,
           author_id,
           name: repo,
           is_fork: false,
@@ -141,7 +144,13 @@ function fix_npm_repository() {
     }
     let repo = find(proxy.repo, { url: repo_url })
     if (!repo) {
-      let { username: repo_username, name: repo_name } = parseRepoUrl(repo_url)
+      let {
+        host,
+        username: repo_username,
+        name: repo_name,
+      } = parseRepoUrl(repo_url)
+      let domain_id =
+        find(proxy.domain, { host })?.id || proxy.domain.push({ host })
       let repo_author_id =
         find(proxy.author, { username: repo_username })?.id ||
         proxy.author.push({ username: repo_username })
@@ -154,6 +163,7 @@ function fix_npm_repository() {
           update_time: null,
         })
       let repo_id = proxy.repo.push({
+        domain_id,
         author_id: repo_author_id,
         name: repo_name,
         is_fork: null,
@@ -174,3 +184,14 @@ function fix_npm_repository() {
   }
 }
 fix_npm_repository()
+
+function set_repo_domain() {
+  let repos = filter(proxy.repo, { domain_id: null })
+  for (let repo of repos) {
+    let { host } = parseRepoUrl(repo.url)
+    let domain_id =
+      find(proxy.domain, { host })?.id || proxy.domain.push({ host })
+    repo.domain_id = domain_id
+  }
+}
+set_repo_domain()

@@ -105,8 +105,15 @@ export type Author = {
   username: string
 }
 
+export type Domain = {
+  id?: null | number
+  host: string
+}
+
 export type Repo = {
   id?: null | number
+  domain_id: null | number
+  domain?: Domain
   author_id: number
   author?: Author
   name: string
@@ -196,6 +203,7 @@ export type DBProxy = {
   page: Page[]
   programming_language: ProgrammingLanguage[]
   author: Author[]
+  domain: Domain[]
   repo: Repo[]
   keyword: Keyword[]
   repo_keyword: RepoKeyword[]
@@ -236,8 +244,10 @@ export let proxy = proxySchema<DBProxy>({
     page: [],
     programming_language: [],
     author: [],
+    domain: [],
     repo: [
       /* foreign references */
+      ['domain', { field: 'domain_id', table: 'domain' }],
       ['author', { field: 'author_id', table: 'author' }],
       ['programming_language', { field: 'programming_language_id', table: 'programming_language' }],
       ['page', { field: 'page_id', table: 'page' }],

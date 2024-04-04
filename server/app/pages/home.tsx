@@ -42,26 +42,30 @@ let content = (
 function Page(attrs: {}, context: DynamicContext) {
   let params = new URLSearchParams(context.routerMatch?.search)
   let keyword = params.get('keyword') || ''
-  let bindings = []
+  let bindings: Record<string, string> = {}
   let sql = /* sql */ `
-select id
+select repo.id
 from repo
+inner join author on author.id = repo.author_id
+inner join domain on domain.id = repo.domain_id
 where true
 `
+  let bindCount = 0
   for (let part of keyword.split(' ')) {
     if (!part) continue
+    bindCount++
+    let bind = ':b' + bindCount
     if (part[0] == '-') {
       part = part.slice(1)
       sql += /* sql */ `
- and (url not like ?)
+  and not (repo.name like ${bind} or author.username like ${bind} or domain.host like ${bind})
 `
     } else {
       sql += /* sql */ `
- and (url like ?)
+  and (repo.name like ${bind} or author.username like ${bind} or domain.host like ${bind})
 `
     }
-    part = '%' + part + '%'
-    bindings.push(part)
+    bindings['b' + bindCount] = '%' + part + '%'
   }
   let repos = db
     .prepare(sql)

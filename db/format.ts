@@ -63,7 +63,8 @@ export function parseRepoUrl(url: string) {
   // e.g. [ 'https:', '', 'github.com', 'beenotung', 'zstd.ts' ]
   // e.g. [ 'https:', '', 'gitlab.com', 'plade', 'sdks', 'js' ]
   let parts = url.split('/')
+  let host = parts[2]
   let username = parts[3]
   let name = parts.slice(4).join('/')
-  return { username, name }
+  return { host, username, name }
 }

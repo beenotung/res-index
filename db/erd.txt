@@ -124,9 +124,16 @@ id integer PK
 username text unique
 
 
+domain
+------
+id integer PK
+host text unique
+
+
 repo
 ----
 id integer PK
+domain_id integer NULL FK >0- domain.id
 author_id integer FK >0- author.id
 name text
 is_fork boolean NULL
