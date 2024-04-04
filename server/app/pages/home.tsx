@@ -9,6 +9,7 @@ import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
 import { VElement } from '../../../client/jsx/types.js'
 import { EarlyTerminate } from '../helpers.js'
+import { ProgrammingLanguageSpan } from '../components/programming-language.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -79,25 +80,11 @@ where true
       <p>{repos.length} matches</p>,
       <div class="list">
         {mapArray(repos, repo => {
-          let language = repo.programming_language?.name
-          switch (language) {
-            case 'Typescript':
-              language = <span>[TS]</span>
-              break
-            case 'Javascript':
-              language = <span>[JS]</span>
-              break
-            case undefined:
-              break
-            default:
-              language = <span>[{language}]</span>
-              break
-          }
           return (
             <div class="repo">
               <div>
-                {language} <b>{repo.name}</b>{' '}
-                <sub>by {repo.author!.username}</sub>
+                {ProgrammingLanguageSpan(repo.programming_language?.name)}{' '}
+                <b>{repo.name}</b> <sub>by {repo.author!.username}</sub>
               </div>
               <a target="_blank" href={repo.url}>
                 {repo.url}
