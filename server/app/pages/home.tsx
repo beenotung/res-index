@@ -42,6 +42,7 @@ let content = (
 
 function Page(attrs: {}, context: DynamicContext) {
   let params = new URLSearchParams(context.routerMatch?.search)
+  let action = params.get('action')
   let keyword = params.get('keyword') || ''
   let bindings: Record<string, string> = {}
   let sql = /* sql */ `
@@ -95,12 +96,13 @@ where true
       </div>,
     ],
   ]
-  if (context.type == 'ws') {
+  if (action == 'search' && context.type == 'ws') {
     context.ws.send(['update', result])
     throw EarlyTerminate
   }
   return (
     <form onsubmit="emitForm(event)" id="searchForm">
+      <input name="action" value="search" hidden />
       <label>
         Keyword: <input name="keyword" value={keyword} />
       </label>{' '}
