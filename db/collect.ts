@@ -611,7 +611,7 @@ let published_npm_package_detail_parser = object({
       }),
       _npmUser: optional(
         object({
-          name: string(),
+          name: optional(string()),
         }),
       ),
     }),
