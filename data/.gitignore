@@ -1,3 +1,4 @@
 *.sqlite3*
 session.txt
 visit.txt
+*.xz
