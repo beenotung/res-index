@@ -1,6 +1,8 @@
 export function cleanRepoUrl(url: string): string | null {
-  if (url == 'TBC') {
-    return null
+  switch (url) {
+    case 'TBC':
+    case 'FIXME':
+      return null
   }
 
   url = url
