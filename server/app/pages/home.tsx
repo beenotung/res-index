@@ -140,7 +140,7 @@ where true
       }
     }
     let groups = Object.values(groupDict)
-    matches = [{ type: 'group', group }]
+    matches = [{ type: 'group', groups }]
   } else {
     matches = repos.map(repo => ({ type: 'repo', repo }))
   }

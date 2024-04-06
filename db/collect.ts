@@ -228,9 +228,9 @@ async function checkGithubRepositories(
               name: repoData.programming_language,
             })
         if (!repo) {
-          let parts = repoData.url.split('/')
-          let name = parts.pop() || parts.pop()!
+          let { name, host } = parseRepoUrl(repoData.url)
           let id = proxy.repo.push({
+            domain_id: getDomainId(host),
             author_id: getAuthorId(username),
             name,
             is_fork: repoData.is_fork,
@@ -786,7 +786,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         }
       } else {
         let keys = Object.keys(pkg.repository)
-        if (keys.length == 1 && pkg.repository.type == "git") {
+        if (keys.length == 1 && pkg.repository.type == 'git') {
           // missing repository url intentionally?
         } else {
           throw new Error(
@@ -801,7 +801,11 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       npm_package.repository = repository
 
     if (repo_url) {
-      let { username: repo_username, name: repo_name } = parseRepoUrl(repo_url)
+      let {
+        host: repo_host,
+        username: repo_username,
+        name: repo_name,
+      } = parseRepoUrl(repo_url)
 
       let repo = find(proxy.repo, { url: repo_url })
       if (!repo) {
@@ -817,6 +821,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
             update_time: null,
           })
         let repo_id = proxy.repo.push({
+          domain_id: getDomainId(repo_host),
           author_id: repo_author_id,
           name: repo_name,
           is_fork: null,
@@ -1069,6 +1074,10 @@ function getAuthorId(username: string): number {
   let author = find(proxy.author, { username })
   if (author) return author.id!
   return proxy.author.push({ username })
+}
+
+function getDomainId(host: string): number {
+  return find(proxy.domain, { host })?.id || proxy.domain.push({ host })
 }
 
 main().catch(e => console.error(e))
