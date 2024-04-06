@@ -2,7 +2,7 @@ import { o } from '../jsx/jsx.js'
 import { prerender } from '../jsx/html.js'
 import SourceCode from '../components/source-code.js'
 import { mapArray } from '../components/fragment.js'
-import { proxy } from '../../../db/proxy.js'
+import { Repo, proxy } from '../../../db/proxy.js'
 import { DynamicContext } from '../context.js'
 import Style from '../components/style.js'
 import { db } from '../../../db/db.js'
@@ -18,12 +18,6 @@ import { ProgrammingLanguageSpan } from '../components/programming-language.js'
 // you don't have to wrap it by a function at all.
 
 let style = Style(/* css */ `
-.list {
-  padding: 0.25rem;
-}
-.repo {
-  padding: 0.25rem;
-}
 label {
   display: block;
   width: 100%;
@@ -35,6 +29,13 @@ label {
   padding: 1rem;
   margin: 0.5rem 0;
   width: fit-content;
+}
+.list {
+  padding: 0.25rem;
+}
+.repo-group,
+.repo {
+  padding: 0.25rem;
 }
 `)
 
@@ -58,8 +59,7 @@ function Page(attrs: {}, context: DynamicContext) {
   let host = params.get('host')
   let username = params.get('username')
   let name = params.get('name')
-
-  let keyword = [host, username, name].join(' ')
+  let prefix = params.get('prefix')
 
   let bindings: Record<string, string> = {}
   let bindCount = 0
@@ -71,6 +71,13 @@ inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
 where true
 `
+
+  if (prefix) {
+    sql += /* sql */ `
+  and repo.name like :prefix
+`
+    bindings.prefix = prefix.toLowerCase() + '%'
+  }
 
   let qs: [string | null, string][] = [
     [host, 'domain.host'],
@@ -97,33 +104,72 @@ where true
     }
   }
 
+  // console.log(sql)
+  // console.log(bindings)
+
   let repos = db
     .prepare(sql)
     .pluck()
     .all(bindings)
     .map((id: any) => proxy.repo[id])
 
-  if (repos.length > 36) {
+  let match_count = repos.length
+
+  let matches: (
+    | { type: 'repo'; repo: Repo }
+    | { type: 'group'; groups: Group[] }
+  )[]
+
+  type Group = {
+    prefix: string
+    repos: Repo[]
+  }
+
+  let group_threshold = 5
+  if (match_count > group_threshold) {
+    let prefix_length = prefix ? prefix.length + 1 : 1
+    let groupDict: Record<string, Group> = {}
+    for (let repo of repos) {
+      let prefix = repo.name.slice(0, prefix_length).toLowerCase()
+      let group = groupDict[prefix]
+      if (!group) {
+        group = { prefix, repos: [repo] }
+        groupDict[prefix] = group
+      } else {
+        group.repos.push(repo)
+      }
+    }
+    let groups = Object.values(groupDict)
+    matches = [{ type: 'group', group }]
+  } else {
+    matches = repos.map(repo => ({ type: 'repo', repo }))
   }
 
   let result: VElement = [
     'div#result',
     {},
     [
-      <p>{repos.length} matches</p>,
+      <p>{match_count} matches</p>,
       <div class="list">
-        {mapArray(repos, repo => {
-          return (
-            <div class="repo">
-              <div>
-                {ProgrammingLanguageSpan(repo.programming_language?.name)}{' '}
-                <b>{repo.name}</b> <sub>by {repo.author!.username}</sub>
-              </div>
-              <a target="_blank" href={repo.url}>
-                {repo.url}
-              </a>
-            </div>
-          )
+        {mapArray(matches, match => {
+          if (match.type == 'group') {
+            return [
+              match.groups.map(group => {
+                let count = group.repos.length
+                if (count == 1) {
+                  return RepoItem(group.repos[0])
+                }
+                return (
+                  <div class="repo-group">
+                    <span>Repo pattern: {group.prefix}*</span>{' '}
+                    <span>({group.repos.length} matches)</span>
+                  </div>
+                )
+              }),
+            ]
+          }
+          let repo = match.repo
+          return RepoItem(repo)
         })}
       </div>,
     ],
@@ -184,6 +230,20 @@ where true
       </p>
       {result}
     </form>
+  )
+}
+
+function RepoItem(repo: Repo) {
+  return (
+    <div class="repo">
+      <div>
+        {ProgrammingLanguageSpan(repo.programming_language?.name)}{' '}
+        <b>{repo.name}</b> <sub>by {repo.author!.username}</sub>
+      </div>
+      <a target="_blank" href={repo.url}>
+        {repo.url}
+      </a>
+    </div>
   )
 }
 
