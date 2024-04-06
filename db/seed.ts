@@ -4,7 +4,6 @@ import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
 import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
-import { env } from 'process'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
 
@@ -12,7 +11,7 @@ import { execSync } from 'child_process'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
-function seed_sample_data() {
+function seed_local_repo() {
   function reset() {
     db.exec('delete from repo')
     db.exec('delete from page')
@@ -47,8 +46,6 @@ function seed_sample_data() {
     return null
   }
 
-  let repo_id = 0
-
   let hosts = ['github.com', 'gitlab.com', 'bitbucket.org']
   for (let host of hosts) {
     let host_dir = join(homedir(), 'workspace', host)
@@ -62,39 +59,43 @@ function seed_sample_data() {
       for (let repo of repos) {
         let repo_dir = join(user_dir, repo)
         if (!statSync(repo_dir).isDirectory()) continue
+
         let domain_id =
           find(proxy.domain, { host })?.id || proxy.domain.push({ host })
-        repo_id++
+
         let url = `https://${host}/${username}/${repo}`
-        proxy.page[repo_id] = {
-          url,
-          payload: null,
-          check_time: null,
-          update_time: null,
-        }
-        proxy.repo[repo_id] = {
-          domain_id,
-          author_id,
-          name: repo,
-          is_fork: false,
-          url,
-          desc: 'stub',
-          programming_language_id: detectLanguage(repo_dir),
-          website: null,
-          stars: null,
-          watchers: null,
-          forks: null,
-          readme: null,
-          last_commit: null,
-          page_id: repo_id,
-        }
+
+        let page_id =
+          find(proxy.page, { url })?.id ||
+          proxy.page.push({
+            url,
+            payload: null,
+            check_time: null,
+            update_time: null,
+          })
+
+        find(proxy.repo, { url }) ||
+          proxy.repo.push({
+            domain_id,
+            author_id,
+            name: repo,
+            is_fork: false,
+            url,
+            desc: null,
+            programming_language_id: detectLanguage(repo_dir),
+            website: null,
+            stars: null,
+            watchers: null,
+            forks: null,
+            readme: null,
+            last_commit: null,
+            page_id,
+          })
       }
     }
   }
 }
-if ('dev' || proxy.repo.length == 0) {
-  seed_sample_data()
-}
+seed_local_repo()
 
 function fix_npm_detail() {
   let prefix = 'https://www.npmjs.com/package/'
