@@ -2,7 +2,7 @@ import { Knex } from 'knex'
 
 // prettier-ignore
 export async function up(knex: Knex): Promise<void> {
-  await knex.raw('alter table `repo` add column `name` text not null')
+  await knex.raw('alter table `repo` add column `name` text null')
 }
 
 // prettier-ignore

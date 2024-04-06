@@ -9,7 +9,7 @@ export async function up(knex: Knex): Promise<void> {
       table.timestamps(false, true)
     })
   }
-  await knex.raw('alter table `repo` add column `author_id` integer not null references `author`(`id`)')
+  await knex.raw('alter table `repo` add column `author_id` integer null references `author`(`id`)')
   await knex.raw('alter table `npm_package` add column `author_id` integer null references `author`(`id`)')
 }
 
