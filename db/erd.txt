@@ -166,7 +166,7 @@ npm_package
 -----------
 id integer PK
 author_id integer NULL FK >0- author.id
-name text
+name text unique
 version text NULL
 desc text NULL
 create_time integer NULL
