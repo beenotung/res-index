@@ -611,7 +611,7 @@ let published_npm_package_detail_parser = object({
       }),
       _npmUser: optional(
         object({
-          name: string(),
+          name: optional(string()),
         }),
       ),
     }),
@@ -785,9 +785,14 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
           repository = repository.replace(/\/issue$/, '')
         }
       } else {
-        throw new Error(
-          'failed to find npm package repository url, name: ' + pkg.name,
-        )
+        let keys = Object.keys(pkg.repository)
+        if (keys.length == 1 && pkg.repository.type == "git") {
+          // missing repository url intentionally?
+        } else {
+          throw new Error(
+            'failed to find npm package repository url, name: ' + pkg.name,
+          )
+        }
       }
     }
     let repo_url = repository ? cleanRepoUrl(repository) : null
