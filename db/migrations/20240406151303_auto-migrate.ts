@@ -2,7 +2,7 @@ import { Knex } from 'knex'
 
 // prettier-ignore
 export async function up(knex: Knex): Promise<void> {
-  //  alter column (npm_package.dependent_page_id) to be non-nullable
+  // alter column (npm_package.dependent_page_id) to be non-nullable
   
   let deps = await knex.select('*').from('npm_package_dependency')
   let keywords = await knex.select('*').from('npm_package_keyword')
