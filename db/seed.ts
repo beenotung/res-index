@@ -46,7 +46,11 @@ function seed_local_repo() {
     return null
   }
 
-  let hosts = ['github.com', 'gitlab.com', 'bitbucket.org']
+  let hosts = [
+    'github.com',
+    // 'gitlab.com',
+    // 'bitbucket.org',
+  ]
   for (let host of hosts) {
     let host_dir = join(homedir(), 'workspace', host)
     let usernames = readdirSync(host_dir)
