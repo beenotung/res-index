@@ -25,6 +25,11 @@ export function cleanRepoUrl(url: string): string | null {
     url = 'https://' + match[1] + '/' + match[2]
   }
 
+  // e.g. "github:Azure/azure-sdk-for-js"
+  if (url.startsWith('github:')) {
+    url = url.replace('github:','https://github.com/')
+  }
+
   if (!url.startsWith('https://')) {
     // e.g. git over ssh?
     throw new Error('Invalid repository url: ' + url)
