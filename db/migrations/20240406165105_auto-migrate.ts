@@ -1,4 +1,5 @@
 import { Knex } from 'knex'
+import { parseRepoUrl } from '../format'
 
 // prettier-ignore
 export async function up(knex: Knex): Promise<void> {
@@ -87,6 +88,16 @@ export async function up(knex: Knex): Promise<void> {
     }
 
     for (let row of repo_rows) {
+      let { host } = parseRepoUrl(row.url)
+      if (!row.domain_id) {
+        let result = await knex.select('id').from('domain').where({ host }).first()
+        if (result ){
+          row.domain_id = result.id
+        } else {
+          let [id] = await knex('domain').insert({ host })
+          row.domain_id = id
+        }
+      }
       await knex.insert(row).into('repo')
     }
     for (let row of repo_keyword_rows) {
