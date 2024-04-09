@@ -789,9 +789,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         if (keys.length == 1 && pkg.repository.type == 'git') {
           // missing repository url intentionally?
         } else {
-          throw new Error(
-            'failed to find npm package repository url, name: ' + pkg.name,
-          )
+          // repository url not specified
+          // throw new Error(
+          //   'failed to find npm package repository url, name: ' + pkg.name,
+          // )
         }
       }
     }
