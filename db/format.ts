@@ -5,6 +5,11 @@ export function cleanRepoUrl(url: string): string | null {
       return null
   }
 
+  // skip private repositories
+  if (url.includes('http://git.nrayvarz.ir')) {
+    return null
+  }
+
   url = url
     .replace(/\/^/, '')
     .replace(/\.git$/, '')
