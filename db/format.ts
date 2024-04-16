@@ -27,7 +27,7 @@ export function cleanRepoUrl(url: string): string | null {
 
   // e.g. "github:Azure/azure-sdk-for-js"
   if (url.startsWith('github:')) {
-    url = url.replace('github:','https://github.com/')
+    url = url.replace('github:', 'https://github.com/')
   }
 
   if (!url.startsWith('https://')) {
