@@ -13,3 +13,7 @@ localhost_*.report.html
 
 # library
 public/lib/
+
+# data files
+data/
+!data/.gitignore
