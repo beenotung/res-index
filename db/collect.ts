@@ -584,25 +584,25 @@ let published_npm_package_detail_parser = object({
       dependencies: optional(
         dict({
           key: string({ sampleValue: 'better-sqlite3' }),
-          value: string({ sampleValue: '^7.1.0' }),
+          value: nullable(string({ sampleValue: '^7.1.0' })),
         }),
       ),
       devDependencies: optional(
         dict({
           key: string({ sampleValue: 'better-sqlite3' }),
-          value: string({ sampleValue: '^7.1.0' }),
+          value: nullable(string({ sampleValue: '^7.1.0' })),
         }),
       ),
       peerDependencies: optional(
         dict({
           key: string({ sampleValue: 'better-sqlite3' }),
-          value: string({ sampleValue: '^7.1.0' }),
+          value: nullable(string({ sampleValue: '^7.1.0' })),
         }),
       ),
       optionalDependencies: optional(
         dict({
           key: string({ sampleValue: 'better-sqlite3' }),
-          value: string({ sampleValue: '^7.1.0' }),
+          value: nullable(string({ sampleValue: '^7.1.0' })),
         }),
       ),
       dist: object({
@@ -872,7 +872,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     storeDeps('optional', version.optionalDependencies)
     function storeDeps(
       type: NpmPackageDependency['type'],
-      deps: undefined | Record<string, string>,
+      deps: undefined | Record<string, string | null>,
     ) {
       if (!deps) {
         del(proxy.npm_package_dependency, {
