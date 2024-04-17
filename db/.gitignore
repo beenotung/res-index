@@ -1,3 +1,9 @@
 npm.json
 download.json
 repo.json
+node_modules
+*.tgz
+dist
+.env
+.env.*
+!.env.example
