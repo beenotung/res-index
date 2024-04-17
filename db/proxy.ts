@@ -112,7 +112,7 @@ export type Domain = {
 
 export type Repo = {
   id?: null | number
-  domain_id: null | number
+  domain_id: number
   domain?: Domain
   author_id: number
   author?: Author

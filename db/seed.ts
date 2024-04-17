@@ -192,8 +192,12 @@ function fix_npm_repository() {
 fix_npm_repository()
 
 function set_repo_domain() {
-  let repos = filter(proxy.repo, { domain_id: null })
-  for (let repo of repos) {
+  let rows = db.query(/* sql */ `
+select id from repo
+where domain_id is null
+`)
+  for (let row of rows) {
+    let repo = proxy.repo[row.id]
     let { host } = parseRepoUrl(repo.url)
     let domain_id =
       find(proxy.domain, { host })?.id || proxy.domain.push({ host })
