@@ -2,10 +2,11 @@ import { filter, find, seedRow } from 'better-sqlite3-proxy'
 import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
-import { readdirSync, statSync } from 'fs'
+import { readdirSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
+import { npm_package_detail_parser } from './collect'
 
 // This file serve like the knex seed file.
 //
@@ -200,3 +201,58 @@ function set_repo_domain() {
   }
 }
 set_repo_domain()
+
+function fix_npm_package_deprecated() {
+  let ids = db
+    .prepare(
+      /* sql */ `
+select
+  npm_package.id
+from npm_package
+inner join page on page.id = npm_package.page_id
+where npm_package.deprecated is null
+  and npm_package.unpublish_time is null
+  and page.payload is not null
+`,
+    )
+    .pluck()
+    .all() as number[]
+  let select = db.prepare(/* sql */ `
+select
+  npm_package.version
+, page.payload
+from npm_package
+inner join page on page.id = npm_package.page_id
+where npm_package.id = :id
+limit 1
+`)
+  let update = db.prepare(/* sql */ `
+update npm_package
+set deprecated = :deprecated
+where id = :id
+`)
+  let n = ids.length
+  let i = 0
+  for (let id of ids) {
+    i++
+    process.stdout.write(`\r fix_npm_package_deprecated progress: ${i}/${n}...`)
+    let row = select.get({ id }) as { version: string; payload: string }
+    let payload = JSON.parse(row.payload)
+    writeFileSync('npm.json', JSON.stringify(payload, null, 2))
+    let pkg = npm_package_detail_parser.parse(payload)
+    if ('error' in pkg) continue
+    if (!('versions' in pkg)) continue
+    let version = pkg.versions[row.version]
+    let deprecated = 'deprecated' in version && version.deprecated != false
+    update.run({
+      id,
+      deprecated: deprecated ? 1 : 0,
+    })
+  }
+  process.stdout.write(
+    `\r` +
+      ' '.repeat(` fix_npm_package_deprecated progress: ${i}/${n}...`.length) +
+      '\r',
+  )
+}
+fix_npm_package_deprecated()

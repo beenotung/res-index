@@ -179,6 +179,7 @@ repository text NULL
 repo_id integer NULL FK >0- repo.id
 homepage text NULL
 readme text NULL
+deprecated boolean NULL
 page_id integer FK >0- page.id
 download_page_id integer FK >0- page.id
 dependent_page_id integer FK >0- page.id

@@ -11,6 +11,7 @@ import {
   ParseResult,
   Parser,
   array,
+  boolean,
   date,
   dateString,
   dict,
@@ -533,6 +534,7 @@ function storeNpmPackage(pkg: {
       repo_id: null,
       homepage: null,
       readme: null,
+      deprecated: null,
       page_id: package_page_id,
       download_page_id,
       dependent_page_id,
@@ -614,6 +616,7 @@ let published_npm_package_detail_parser = object({
           name: optional(string()),
         }),
       ),
+      deprecated: optional(or([string(), boolean()])),
     }),
   }),
   'time': dict({ key: string(), value: date() }),
@@ -633,7 +636,7 @@ let published_npm_package_detail_parser = object({
 let not_found_npm_package_detail_parser = object({
   error: literal('Not found'),
 })
-let npm_package_detail_parser = or([
+export let npm_package_detail_parser = or([
   unpublish_npm_package_detail_parser,
   published_npm_package_detail_parser,
   not_found_npm_package_detail_parser,
@@ -712,6 +715,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       )
 
     let create_time = packageTime.created?.getTime() || null
+
+    npm_package.deprecated =
+      'deprecated' in version && version.deprecated != false
 
     function findAuthor() {
       if (version._npmUser?.name) {
@@ -1081,4 +1087,6 @@ function getDomainId(host: string): number {
   return find(proxy.domain, { host })?.id || proxy.domain.push({ host })
 }
 
-main().catch(e => console.error(e))
+if (process.argv[2] == __filename) {
+  main().catch(e => console.error(e))
+}

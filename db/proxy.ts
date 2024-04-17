@@ -163,6 +163,7 @@ export type NpmPackage = {
   repo?: Repo
   homepage: null | string
   readme: null | string
+  deprecated: null | boolean
   page_id: number
   page?: Page
   download_page_id: number
