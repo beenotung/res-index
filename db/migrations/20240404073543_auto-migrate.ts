@@ -1,6 +1,6 @@
-import { Knex } from "knex";
+import { Knex } from 'knex';
 
-
+// prettier-ignore
 export async function up(knex: Knex): Promise<void> {
 
   if (!(await knex.schema.hasTable('domain'))) {
@@ -13,7 +13,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.raw('alter table `repo` add column `domain_id` integer null references `domain`(`id`)')
 }
 
-
+// prettier-ignore
 export async function down(knex: Knex): Promise<void> {
   await knex.raw('alter table `repo` drop column `domain_id`')
   await knex.schema.dropTableIfExists('domain')
