@@ -1096,6 +1096,6 @@ function getDomainId(host: string): number {
   return find(proxy.domain, { host })?.id || proxy.domain.push({ host })
 }
 
-if (process.argv[2] == __filename) {
+if (process.argv[1] == __filename) {
   main().catch(e => console.error(e))
 }
