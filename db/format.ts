@@ -1,8 +1,16 @@
+let general_sites = ['github.com', 'gitlab.com', 'bitbucket.org']
+
 export function cleanRepoUrl(url: string): string | null {
   switch (url) {
     case 'TBC':
     case 'FIXME':
       return null
+  }
+
+  // skip general site without repository name
+  // e.g. 'gitlab.com'
+  if (general_sites.includes(url)) {
+    return null
   }
 
   // skip private repositories
