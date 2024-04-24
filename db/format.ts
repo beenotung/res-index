@@ -1,3 +1,5 @@
+import { isIP } from '@beenotung/tslib/url'
+
 let general_sites = ['github.com', 'gitlab.com', 'bitbucket.org']
 
 export function cleanRepoUrl(url: string): string | null {
@@ -15,6 +17,12 @@ export function cleanRepoUrl(url: string): string | null {
 
   // skip private repositories
   if (url.includes('http://git.nrayvarz.ir')) {
+    return null
+  }
+
+  // skip IP-based repositories
+  // e.g. "http://10.70.71.36/vue/ei"
+  if (isIP(url)) {
     return null
   }
 
