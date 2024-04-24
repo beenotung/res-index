@@ -43,12 +43,18 @@ export function cleanRepoUrl(url: string): string | null {
     url = url.replace('github:', 'https://github.com/')
   }
 
+  let parts = url.split('/')
+
+  // e.g. "github.com/bwqdxxg/Bwqdxxg-TsLint"
+  if (parts.length == 3 && general_sites.includes(parts[0])) {
+    url = 'https://' + url
+    parts = url.split('/')
+  }
+
   if (!url.startsWith('https://')) {
     // e.g. git over ssh?
     throw new Error('Invalid repository url: ' + url)
   }
-
-  let parts = url.split('/')
 
   // e.g. "https://developers.reddit.com/"
   if (parts.length < 5) {
