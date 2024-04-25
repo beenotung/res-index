@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { fetch_retry } from '@beenotung/tslib/async/network'
 import { DAY } from '@beenotung/tslib/time'
 import { db } from './db'
 import { del, filter, find } from 'better-sqlite3-proxy'
@@ -1094,6 +1095,10 @@ function getAuthorId(username: string): number {
 
 function getDomainId(host: string): number {
   return find(proxy.domain, { host })?.id || proxy.domain.push({ host })
+}
+
+function fetch(url: string) {
+  return fetch_retry(url, 3)
 }
 
 if (process.argv[1] == __filename) {
