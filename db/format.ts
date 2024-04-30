@@ -9,6 +9,11 @@ export function cleanRepoUrl(url: string): string | null {
       return null
   }
 
+  // e.g. 'git clone https://services.sungard.com/git/scm/~ricky.casey/cio-mobile-app'
+  if (url.startsWith('git clone ')) {
+    url = url.substring('git clone '.length)
+  }
+
   // skip general site without repository name
   // e.g. 'gitlab.com'
   if (general_sites.includes(url)) {
@@ -16,7 +21,10 @@ export function cleanRepoUrl(url: string): string | null {
   }
 
   // skip private repositories
-  if (url.includes('http://git.nrayvarz.ir')) {
+  if (
+    (url.startsWith('http://') && url.includes(':')) ||
+    url.startsWith('http://git.nrayvarz.ir')
+  ) {
     return null
   }
 
