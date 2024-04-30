@@ -146,6 +146,7 @@ watchers integer NULL
 forks integer NULL
 readme text NULL
 last_commit integer NULL
+is_public boolean NULL
 page_id integer FK >0- page.id
 
 

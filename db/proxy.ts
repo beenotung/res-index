@@ -128,6 +128,7 @@ export type Repo = {
   forks: null | number
   readme: null | string
   last_commit: null | number
+  is_public: null | boolean
   page_id: number
   page?: Page
 }

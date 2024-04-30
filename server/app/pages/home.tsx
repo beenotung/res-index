@@ -1,5 +1,4 @@
 import { o } from '../jsx/jsx.js'
-import { prerender } from '../jsx/html.js'
 import SourceCode from '../components/source-code.js'
 import { mapArray } from '../components/fragment.js'
 import { Repo, proxy } from '../../../db/proxy.js'
@@ -7,9 +6,11 @@ import { DynamicContext } from '../context.js'
 import Style from '../components/style.js'
 import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
-import { VElement } from '../../../client/jsx/types.js'
 import { EarlyTerminate } from '../helpers.js'
 import { ProgrammingLanguageSpan } from '../components/programming-language.js'
+import { Link } from '../components/router.js'
+import { nodeToVNode } from '../jsx/vnode.js'
+import { Element } from '../jsx/types.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -36,6 +37,10 @@ label {
 .repo-group,
 .repo {
   padding: 0.25rem;
+  padding-bottom: 0.5rem;
+}
+.repo-desc {
+  margin-top: 0.25rem;
 }
 `)
 
@@ -69,7 +74,7 @@ select repo.id
 from repo
 inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
-where true
+where repo.is_public = 1
 `
 
   if (prefix) {
@@ -115,18 +120,19 @@ where true
 
   let match_count = repos.length
 
-  let matches: (
-    | { type: 'repo'; repo: Repo }
-    | { type: 'group'; groups: Group[] }
-  )[]
+  type Match =
+    | { type: 'repo'; repo: Repo; sortKey: string }
+    | { type: 'group'; group: Group; sortKey: string }
+  let matches: Match[]
 
   type Group = {
     prefix: string
     repos: Repo[]
   }
 
-  let group_threshold = 5
-  if (match_count > group_threshold) {
+  let total_match_threshold = 36
+  let group_match_threshold = 5
+  if (match_count > total_match_threshold) {
     let prefix_length = prefix ? prefix.length + 1 : 1
     let groupDict: Record<string, Group> = {}
     for (let repo of repos) {
@@ -139,34 +145,61 @@ where true
         group.repos.push(repo)
       }
     }
-    let groups = Object.values(groupDict)
-    matches = [{ type: 'group', groups }]
+    matches = Object.values(groupDict).map(group => ({
+      type: 'group',
+      group,
+      sortKey: group.prefix.toLowerCase(),
+    }))
   } else {
-    matches = repos.map(repo => ({ type: 'repo', repo }))
+    matches = repos.map(repo => ({ type: 'repo', repo, sortKey: repo.name.toLowerCase() }))
   }
+  matches = matches
+    .flatMap((match): Match[] | Match => {
+      if (
+        match.type != 'group' ||
+        match.group.repos.length > group_match_threshold
+      )
+        return match
+      return match.group.repos.map(repo => ({
+        type: 'repo',
+        repo,
+        sortKey: repo.name,
+      }))
+    })
+    .sort((a, b) => {
+      if (a.type == 'group' && b.type != 'group') return +1
+      if (a.type != 'group' && b.type == 'group') return -1
+      if (a.sortKey < b.sortKey) return -1
+      if (a.sortKey > b.sortKey) return +1
+      return 0
+    })
 
-  let result: VElement = [
+  let result: Element = [
     'div#result',
     {},
     [
+      prefix ? <p>Repo prefix: {prefix}*</p> : null,
       <p>{match_count} matches</p>,
       <div class="list">
         {mapArray(matches, match => {
           if (match.type == 'group') {
-            return [
-              match.groups.map(group => {
-                let count = group.repos.length
-                if (count == 1) {
-                  return RepoItem(group.repos[0])
-                }
-                return (
-                  <div class="repo-group">
-                    <span>Repo pattern: {group.prefix}*</span>{' '}
-                    <span>({group.repos.length} matches)</span>
-                  </div>
-                )
-              }),
-            ]
+            let {
+              group: { prefix, repos },
+            } = match
+            let count = repos.length
+            if (count == 1) {
+              return RepoItem(repos[0])
+            }
+            params.set('prefix', prefix)
+            let href = '/?' + params
+            return (
+              <div class="repo-group">
+                Repo pattern:{' '}
+                <Link href={href}>
+                  {prefix}* ({count} matches)
+                </Link>
+              </div>
+            )
           }
           let repo = match.repo
           return RepoItem(repo)
@@ -175,7 +208,7 @@ where true
     ],
   ]
   if (action == 'search' && context.type == 'ws') {
-    context.ws.send(['update', result])
+    context.ws.send(['update', nodeToVNode(result, context)])
     throw EarlyTerminate
   }
   return (
@@ -234,6 +267,7 @@ where true
 }
 
 function RepoItem(repo: Repo) {
+  let { desc } = repo
   return (
     <div class="repo">
       <div>
@@ -243,6 +277,7 @@ function RepoItem(repo: Repo) {
       <a target="_blank" href={repo.url}>
         {repo.url}
       </a>
+      {desc ? <div class='repo-desc'>{desc}</div> : null}
     </div>
   )
 }

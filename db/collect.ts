@@ -245,6 +245,7 @@ async function checkGithubRepositories(
             forks: null,
             readme: null,
             last_commit: null,
+            is_public: true,
             page_id: repoPage.id!,
           })
           repo = proxy.repo[id]
@@ -851,6 +852,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
           forks: null,
           readme: null,
           last_commit: null,
+          is_public: !!cleanRepoUrl(repo_url),
           page_id: repo_page_id,
         })
         repo = proxy.repo[repo_id]
