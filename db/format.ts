@@ -20,25 +20,14 @@ export function cleanRepoUrl(url: string): string | null {
     return null
   }
 
-  // skip private repositories
-  if (
-    (url.startsWith('http://') && url.includes(':')) ||
-    url.startsWith('http://git.nrayvarz.ir')
-  ) {
-    return null
-  }
-
-  // skip IP-based repositories
-  // e.g. "http://10.70.71.36/vue/ei"
-  if (isIP(url)) {
-    return null
-  }
-
+  // fix protocol part
   url = url
     .replace(/\/^/, '')
     .replace(/\.git$/, '')
     // e.g. "git+https://github.com/beenotung/better-sqlite3-schema.git"
     .replace(/^git\+https:\/\//, 'https://')
+    // e.g. "git+http://git.nrayvarz.ir/and-official/rayvarz/eoffice/rayflmc"
+    .replace(/^git\+http:\/\//, 'http://')
     // e.g. "git://github.com/beenotung/erlang.js.git"
     .replace(/^git:\/\//, 'https://')
     // e.g. "git+ssh://git@github.com/beenotung/http-deceiver"
@@ -47,6 +36,20 @@ export function cleanRepoUrl(url: string): string | null {
     .replace(/^ssh:\/\/git@/, 'https://')
     // e.g. "http://github.com/jprichardson/terst"
     .replace(/^http:\/\/github.com\//, 'https://github.com/')
+
+  // skip IP-based repositories
+  // e.g. "http://10.70.71.36/vue/ei"
+  if (isIP(url)) {
+    return null
+  }
+
+  // skip private repositories
+  if (
+    (url.startsWith('http://') && url.includes(':')) ||
+    url.startsWith('http://git.nrayvarz.ir')
+  ) {
+    return null
+  }
 
   // e.g. "git@github.com:maleck13/readline"
   let match = url.match(/^git@(.*):(.*)/)
@@ -95,6 +98,12 @@ export function cleanRepoUrl(url: string): string | null {
   // e.g. "https://git.reyah.ga/reyah/libraries/reyah-oauth-provider"
   if (parts.length > 5) {
     // throw new Error('Invalid repository url: ' + url)
+  }
+
+  // skip author page
+  // e.g. "https://github.com/textioHQ/"
+  if (!parts[4]) {
+    return null
   }
 
   url = parts.join('/')
