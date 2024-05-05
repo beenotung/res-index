@@ -53,7 +53,7 @@ let select_pending_page = db.prepare<
   { id: number; url: string }
 >(/* sql */ `
 with incomplete_page as (
-  select page_id from npm_package where deprecated is null
+  select page_id from npm_package where deprecated is null or has_types is null
   union
   select page_id from repo where is_public is null
 )
@@ -577,6 +577,7 @@ function storeNpmPackage(pkg: {
       homepage: null,
       readme: null,
       deprecated: null,
+      has_types: null,
       page_id: package_page_id,
       download_page_id,
       dependent_page_id,
@@ -625,6 +626,8 @@ let published_npm_package_detail_parser = object({
   'versions': dict({
     key: string({ sampleValue: '0.0.1' }),
     value: object({
+      types: optional(string()),
+      typings: optional(string()),
       dependencies: optional(
         dict({
           key: string({ sampleValue: 'better-sqlite3' }),
@@ -715,7 +718,12 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   db.transaction(() => {
     /* npm package page */
     page.check_time = now
-    if (page.payload == payload && npm_package.deprecated != null) return
+    if (
+      page.payload == payload &&
+      npm_package.deprecated != null &&
+      npm_package.has_types != null
+    )
+      return
     page.payload = payload
     page.update_time = now
 
@@ -764,8 +772,12 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     let create_time = packageTime.created?.getTime() || null
 
-    npm_package.deprecated =
-      'deprecated' in version && version.deprecated != false
+    let deprecated = 'deprecated' in version && version.deprecated != false
+    if (npm_package.deprecated != deprecated)
+      npm_package.deprecated = deprecated
+
+    let has_types = !!(version.types || version.typings)
+    if (npm_package.has_types != has_types) npm_package.has_types = has_types
 
     function findAuthor() {
       if (version._npmUser?.name) {

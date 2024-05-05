@@ -62,6 +62,7 @@ type MatchedNpmPackage = {
   username: string
   desc: string | null
   weekly_downloads: number | null
+  has_types: boolean | null
 }
 
 type MatchedItem = {
@@ -107,6 +108,7 @@ select
 , author.username
 , npm_package.desc
 , npm_package.weekly_downloads
+, npm_package.has_types
 from npm_package
 inner join author on author.id = author_id
 where deprecated = 0
@@ -133,6 +135,8 @@ where deprecated = 0
   for (let [value, field] of qs) {
     if (value) {
       for (let part of value.split(' ')) {
+        part = part.trim()
+        if (!part) continue
         search_repo_bind_count++
         let bind = 'b' + search_repo_bind_count
         if (part[0] == '-') {
@@ -174,20 +178,38 @@ where deprecated = 0
       }
     }
   }
-
-  // console.log(sql)
-  // console.log(bindings)
+  let skip_npm = false
+  if (host) {
+    let include_npm = false
+    let include_other = false
+    for (let part of host.split(' ')) {
+      part = part.trim()
+      if (!part) continue
+      if (part.startsWith('-npm')) {
+        skip_npm = true
+        break
+      }
+      if (part.startsWith('npm')) {
+        include_npm = true
+        continue
+      }
+      include_other = true
+    }
+    skip_npm ||= include_other && !include_npm
+  }
 
   let matchedItems = db
     .prepare<{}, MatchedItem>(search_repo_sql)
     .all(search_repo_bindings)
 
-  let matchedPackages = db
-    .prepare<{}, MatchedItem>(search_npm_package_sql)
-    .all(search_npm_package_bindings)
+  let matchedPackages = skip_npm
+    ? []
+    : db
+        .prepare<{}, MatchedNpmPackage>(search_npm_package_sql)
+        .all(search_npm_package_bindings)
   for (let npm_package of matchedPackages) {
     // FIXME move to render part to avoid bug when collapsed into prefix pattern?
-    let { name, username } = npm_package
+    let { name, username, has_types } = npm_package
     if (name.startsWith('@' + username)) {
       name = name.substring(username.length + 2)
     }
@@ -195,7 +217,12 @@ where deprecated = 0
       name,
       desc: npm_package.desc,
       url: `https://www.npmjs.com/package/${npm_package.name}`,
-      programming_language: null, // TODO check npm_package is TS/JS
+      programming_language:
+        has_types == true
+          ? 'Typescript'
+          : has_types == false
+            ? 'Javascript'
+            : null,
       username,
       weekly_downloads: npm_package.weekly_downloads,
     })
@@ -298,7 +325,7 @@ where deprecated = 0
     <form onsubmit="emitForm(event)" id="searchForm">
       <input name="action" value="search" hidden />
       <label>
-        Repo host: <input name="host" placeholder="e.g. github" value={host} />
+        Repo Host: <input name="host" placeholder="e.g. npmjs" value={host} />
       </label>
       <label>
         Username:{' '}
@@ -306,7 +333,7 @@ where deprecated = 0
       </label>
       <label>
         Repo/Package name:{' '}
-        <input name="name" placeholder={'e.g. "react event"'} value={name} />
+        <input name="name" placeholder={'e.g. react event'} value={name} />
       </label>
       <input type="submit" value="Search" />
       <p class="hint">

@@ -165,6 +165,7 @@ export type NpmPackage = {
   homepage: null | string
   readme: null | string
   deprecated: null | boolean
+  has_types: null | boolean
   page_id: number
   page?: Page
   download_page_id: number
