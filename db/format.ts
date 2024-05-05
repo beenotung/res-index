@@ -11,6 +11,11 @@ export function cleanRepoUrl(url: string): string | null {
       return null
   }
 
+  // e.g. npm package: "post-or-save-package"
+  if (url == 'git+') {
+    return null
+  }
+
   // e.g. 'git clone https://services.sungard.com/git/scm/~ricky.casey/cio-mobile-app'
   if (url.startsWith('git clone ')) {
     url = url.substring('git clone '.length)

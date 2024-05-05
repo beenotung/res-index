@@ -828,6 +828,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       typeof pkg.repository == 'string'
         ? pkg.repository
         : pkg.repository?.url || null
+    if (repository == 'git+') {
+      // e.g. npm package: "post-or-save-package"
+      repository = null
+    }
     if (!repository && typeof pkg.repository == 'object') {
       if (pkg.repository.url == '') {
         // seems to be intentionally removed
