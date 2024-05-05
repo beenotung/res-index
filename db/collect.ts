@@ -48,11 +48,29 @@ async function main() {
   console.log('done.')
 }
 
+let select_pending_page = db.prepare<
+  void[],
+  { id: number; url: string }
+>(/* sql */ `
+with incomplete_page as (
+  select page_id from npm_package where deprecated is null
+  union
+  select page_id from repo where is_public is null
+)
+select
+  page.id
+, page.url
+from page
+where page.check_time is null
+  or page.id in (select page_id from incomplete_page)
+order by page.id asc
+`)
+
 async function collectPendingPages(page: GracefulPage) {
   let timer = startTimer('collect pending pages')
   let dependent_rate_limited = false
   for (;;) {
-    let pages = filter(proxy.page, { check_time: null })
+    let pages = select_pending_page.all()
     if (pages.length == 0) break
     if (dependent_rate_limited) {
       await later(5000)
@@ -281,6 +299,27 @@ let nullable_date = nullable(date())
 async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"
   await page.goto(repo.url)
+  let is_404 = await page.evaluate(() => {
+    return !!document.querySelector(
+      '[alt="404 “This is not the web page you are looking for”"]',
+    )
+  })
+  if (is_404) {
+    let payload = JSON.stringify({ is_404 })
+    let now = Date.now()
+    db.transaction(() => {
+      /* repo page */
+      let page = repo.page!
+      page.check_time = now
+      if (page.payload == payload && repo.is_public == false) return
+      page.payload = payload
+      page.update_time = now
+
+      /* repo */
+      if (repo.is_public != false) repo.is_public = false
+    })()
+    return
+  }
   let is_empty = await page.evaluate(() => {
     for (let h3 of document.querySelectorAll('h3')) {
       if (h3.innerText == 'This repository is empty.') {
@@ -370,12 +409,13 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
     /* repo page */
     let page = repo.page!
     page.check_time = now
-    if (page.payload == payload) return
+    if (page.payload == payload && repo.is_public != null) return
     page.payload = payload
     page.update_time = now
 
     /* repo */
     let repo_id = repo.id!
+    if (repo.is_public == null) repo.is_public = true
     if (repo.desc != res.desc) repo.desc = res.desc
     if (repo.website != res.website) repo.website = res.website
 
@@ -675,7 +715,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   db.transaction(() => {
     /* npm package page */
     page.check_time = now
-    if (page.payload == payload) return
+    if (page.payload == payload && npm_package.deprecated != null) return
     page.payload = payload
     page.update_time = now
 
@@ -852,7 +892,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
           forks: null,
           readme: null,
           last_commit: null,
-          is_public: !!cleanRepoUrl(repo_url),
+          is_public: null,
           page_id: repo_page_id,
         })
         repo = proxy.repo[repo_id]
