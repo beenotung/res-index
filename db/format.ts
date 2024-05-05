@@ -7,7 +7,7 @@ export function cleanRepoUrl(url: string): string | null {
     case 'TBC':
     case 'FIXME':
     case 'npm/security-holder':
-      // e.g. npm package typescript3 -> npm/security-holder
+      // e.g. npm package: typescript3 -> npm/security-holder
       return null
   }
 
