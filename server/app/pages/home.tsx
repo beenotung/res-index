@@ -1,7 +1,6 @@
 import { o } from '../jsx/jsx.js'
 import SourceCode from '../components/source-code.js'
 import { mapArray } from '../components/fragment.js'
-import { Repo, proxy } from '../../../db/proxy.js'
 import { DynamicContext } from '../context.js'
 import Style from '../components/style.js'
 import { db } from '../../../db/db.js'
@@ -19,10 +18,10 @@ import { Element } from '../jsx/types.js'
 // you don't have to wrap it by a function at all.
 
 let style = Style(/* css */ `
-label {
+#searchForm label {
   display: block;
   width: 100%;
-  text-align: end;
+  margin: 0.25rem;
 }
 .hint {
   border-inline-start: 3px solid #748;
@@ -34,12 +33,12 @@ label {
 .list {
   padding: 0.25rem;
 }
-.repo-group,
-.repo {
+.res-group,
+.res {
   padding: 0.25rem;
   padding-bottom: 0.5rem;
 }
-.repo-desc {
+.res-desc {
   margin-top: 0.25rem;
 }
 `)
@@ -51,12 +50,28 @@ searchForm.keyword.focus()
 let content = (
   <div id="home">
     {style}
-    <h1>FOSS Git Repository Index</h1>
+    <h1>FOSS Git Repository & NPM Package Index</h1>
     <Page />
     {script}
     <SourceCode page="home.tsx" />
   </div>
 )
+
+type MatchedNpmPackage = {
+  name: string
+  username: string
+  desc: string | null
+  weekly_downloads: number | null
+}
+
+type MatchedItem = {
+  name: string
+  desc: string | null
+  url: string
+  programming_language: string | null
+  username: string
+  weekly_downloads: number | null
+}
 
 function Page(attrs: {}, context: DynamicContext) {
   let params = new URLSearchParams(context.routerMatch?.search)
@@ -66,24 +81,50 @@ function Page(attrs: {}, context: DynamicContext) {
   let name = params.get('name')
   let prefix = params.get('prefix')
 
-  let bindings: Record<string, string> = {}
-  let bindCount = 0
+  let search_repo_bindings: Record<string, string> = {}
+  let search_repo_bind_count = 0
 
-  let sql = /* sql */ `
-select repo.id
+  let search_npm_package_bindings: Record<string, string> = {}
+  let search_npm_package_bind_count = 0
+
+  let search_repo_sql = /* sql */ `
+select
+  repo.name
+, repo.desc
+, repo.url
+, programming_language.name as programming_language
+, author.username
 from repo
 inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
+left join programming_language on programming_language.id = repo.programming_language_id
 where repo.is_public = 1
 `
 
+  let search_npm_package_sql = /* sql */ `
+select
+  npm_package.name
+, author.username
+, npm_package.desc
+, npm_package.weekly_downloads
+from npm_package
+inner join author on author.id = author_id
+where deprecated = 0
+  and repo_id is null
+`
+
   if (prefix) {
-    sql += /* sql */ `
+    search_repo_sql += /* sql */ `
   and repo.name like :prefix
 `
-    bindings.prefix = prefix.toLowerCase() + '%'
+    search_npm_package_sql += /* sql */ `
+  and npm_package.name like :prefix
+`
+    search_repo_bindings.prefix = prefix.toLowerCase() + '%'
+    search_npm_package_bindings.prefix = prefix.toLowerCase() + '%'
   }
 
+  // add bindings for search_repo
   let qs: [string | null, string][] = [
     [host, 'domain.host'],
     [username, 'author.username'],
@@ -92,19 +133,44 @@ where repo.is_public = 1
   for (let [value, field] of qs) {
     if (value) {
       for (let part of value.split(' ')) {
-        bindCount++
-        let bind = 'b' + bindCount
+        search_repo_bind_count++
+        let bind = 'b' + search_repo_bind_count
         if (part[0] == '-') {
           part = part.slice(1)
-          sql += /* sql */ `
+          search_repo_sql += /* sql */ `
   and ${field} not like :${bind}
 `
         } else {
-          sql += /* sql */ `
+          search_repo_sql += /* sql */ `
   and ${field} like :${bind}
 `
         }
-        bindings[bind] = '%' + part + '%'
+        search_repo_bindings[bind] = '%' + part + '%'
+      }
+    }
+  }
+
+  // add bindings for search_npm_package
+  qs = [
+    [username, 'author.username'],
+    [name, 'npm_package.name'],
+  ]
+  for (let [value, field] of qs) {
+    if (value) {
+      for (let part of value.split(' ')) {
+        search_npm_package_bind_count++
+        let bind = 'b' + search_npm_package_bind_count
+        if (part[0] == '-') {
+          part = part.slice(1)
+          search_npm_package_sql += /* sql */ `
+  and ${field} not like :${bind}
+`
+        } else {
+          search_npm_package_sql += /* sql */ `
+  and ${field} like :${bind}
+`
+        }
+        search_npm_package_bindings[bind] = '%' + part + '%'
       }
     }
   }
@@ -112,22 +178,39 @@ where repo.is_public = 1
   // console.log(sql)
   // console.log(bindings)
 
-  let repos = db
-    .prepare(sql)
-    .pluck()
-    .all(bindings)
-    .map((id: any) => proxy.repo[id])
+  let matchedItems = db
+    .prepare<{}, MatchedItem>(search_repo_sql)
+    .all(search_repo_bindings)
 
-  let match_count = repos.length
+  let matchedPackages = db
+    .prepare<{}, MatchedItem>(search_npm_package_sql)
+    .all(search_npm_package_bindings)
+  for (let npm_package of matchedPackages) {
+    // FIXME move to render part to avoid bug when collapsed into prefix pattern?
+    let { name, username } = npm_package
+    if (name.startsWith('@' + username)) {
+      name = name.substring(username.length + 2)
+    }
+    matchedItems.push({
+      name,
+      desc: npm_package.desc,
+      url: `https://www.npmjs.com/package/${npm_package.name}`,
+      programming_language: null, // TODO check npm_package is TS/JS
+      username,
+      weekly_downloads: npm_package.weekly_downloads,
+    })
+  }
+
+  let match_count = matchedItems.length
 
   type Match =
-    | { type: 'repo'; repo: Repo; sortKey: string }
+    | { type: 'item'; item: MatchedItem; sortKey: string }
     | { type: 'group'; group: Group; sortKey: string }
   let matches: Match[]
 
   type Group = {
     prefix: string
-    repos: Repo[]
+    resItems: MatchedItem[]
   }
 
   let total_match_threshold = 36
@@ -135,14 +218,14 @@ where repo.is_public = 1
   if (match_count > total_match_threshold) {
     let prefix_length = prefix ? prefix.length + 1 : 1
     let groupDict: Record<string, Group> = {}
-    for (let repo of repos) {
+    for (let repo of matchedItems) {
       let prefix = repo.name.slice(0, prefix_length).toLowerCase()
       let group = groupDict[prefix]
       if (!group) {
-        group = { prefix, repos: [repo] }
+        group = { prefix, resItems: [repo] }
         groupDict[prefix] = group
       } else {
-        group.repos.push(repo)
+        group.resItems.push(repo)
       }
     }
     matches = Object.values(groupDict).map(group => ({
@@ -151,19 +234,23 @@ where repo.is_public = 1
       sortKey: group.prefix.toLowerCase(),
     }))
   } else {
-    matches = repos.map(repo => ({ type: 'repo', repo, sortKey: repo.name.toLowerCase() }))
+    matches = matchedItems.map(item => ({
+      type: 'item',
+      item,
+      sortKey: item.name.toLowerCase(),
+    }))
   }
   matches = matches
     .flatMap((match): Match[] | Match => {
       if (
         match.type != 'group' ||
-        match.group.repos.length > group_match_threshold
+        match.group.resItems.length > group_match_threshold
       )
         return match
-      return match.group.repos.map(repo => ({
-        type: 'repo',
-        repo,
-        sortKey: repo.name,
+      return match.group.resItems.map(item => ({
+        type: 'item',
+        item,
+        sortKey: item.name,
       }))
     })
     .sort((a, b) => {
@@ -178,31 +265,27 @@ where repo.is_public = 1
     'div#result',
     {},
     [
-      prefix ? <p>Repo prefix: {prefix}*</p> : null,
+      prefix ? <p>repo/package prefix: {prefix}*</p> : null,
       <p>{match_count} matches</p>,
       <div class="list">
         {mapArray(matches, match => {
-          if (match.type == 'group') {
-            let {
-              group: { prefix, repos },
-            } = match
-            let count = repos.length
-            if (count == 1) {
-              return RepoItem(repos[0])
-            }
-            params.set('prefix', prefix)
-            let href = '/?' + params
-            return (
-              <div class="repo-group">
-                Repo pattern:{' '}
-                <Link href={href}>
-                  {prefix}* ({count} matches)
-                </Link>
-              </div>
-            )
+          if (match.type == 'item') {
+            return MatchedItem(match.item)
           }
-          let repo = match.repo
-          return RepoItem(repo)
+          let {
+            group: { prefix, resItems: repos },
+          } = match
+          let count = repos.length
+          if (count == 1) {
+            return MatchedItem(repos[0])
+          }
+          params.set('prefix', prefix)
+          let href = '/?' + params
+          return (
+            <div class="res-group">
+              <Link href={href}>pattern: {prefix}*</Link> ({count} matches)
+            </div>
+          )
         })}
       </div>,
     ],
@@ -214,42 +297,17 @@ where repo.is_public = 1
   return (
     <form onsubmit="emitForm(event)" id="searchForm">
       <input name="action" value="search" hidden />
-      <table>
-        <tbody>
-          {mapArray(
-            [
-              [
-                'Repo host',
-                <input name="host" placeholder="e.g. github" value={host} />,
-              ],
-              [
-                'Username',
-                <input
-                  name="username"
-                  placeholder="e.g. beeno"
-                  value={username}
-                />,
-              ],
-              [
-                'Repo name',
-                <input
-                  name="name"
-                  placeholder={'e.g. "react event"'}
-                  value={name}
-                />,
-              ],
-            ],
-            ([label, input]) => (
-              <tr>
-                <td>
-                  <label>{label}: </label>
-                </td>
-                <td>{input}</td>
-              </tr>
-            ),
-          )}
-        </tbody>
-      </table>
+      <label>
+        Repo host: <input name="host" placeholder="e.g. github" value={host} />
+      </label>
+      <label>
+        Username:{' '}
+        <input name="username" placeholder="e.g. beeno" value={username} />
+      </label>
+      <label>
+        Repo/Package name:{' '}
+        <input name="name" placeholder={'e.g. "react event"'} value={name} />
+      </label>
       <input type="submit" value="Search" />
       <p class="hint">
         Hint: you can search by multiple keywords, separated by space, e.g.
@@ -266,18 +324,20 @@ where repo.is_public = 1
   )
 }
 
-function RepoItem(repo: Repo) {
-  let { desc } = repo
+function MatchedItem(res: MatchedItem) {
+  let { desc, programming_language } = res
   return (
-    <div class="repo">
+    <div class="res">
       <div>
-        {ProgrammingLanguageSpan(repo.programming_language?.name)}{' '}
-        <b>{repo.name}</b> <sub>by {repo.author!.username}</sub>
+        {programming_language
+          ? ProgrammingLanguageSpan(programming_language)
+          : null}
+        <b>{res.name}</b> <sub>by {res.username}</sub>
       </div>
-      <a target="_blank" href={repo.url}>
-        {repo.url}
+      <a target="_blank" href={res.url}>
+        {res.url}
       </a>
-      {desc ? <div class='repo-desc'>{desc}</div> : null}
+      {desc ? <div class="res-desc">{desc}</div> : null}
     </div>
   )
 }

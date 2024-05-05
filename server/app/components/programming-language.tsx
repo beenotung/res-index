@@ -1,6 +1,6 @@
 import { o } from '../jsx/jsx.js'
 
-export function ProgrammingLanguageSpan(name: string | undefined) {
+export function ProgrammingLanguageSpan(name: string) {
   let code: string
   switch (name) {
     case undefined:
@@ -15,5 +15,9 @@ export function ProgrammingLanguageSpan(name: string | undefined) {
       code = name
       break
   }
-  return <span title={`Programming Language: ${name}`}>[{code}]</span>
+  return (
+    <>
+      <span title={`Programming Language: ${name}`}>[{code}]</span>{' '}
+    </>
+  )
 }
