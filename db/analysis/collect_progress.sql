@@ -6,12 +6,26 @@ with
 )
 , want_list as (
     select
-      id
+      count(id) as count
     from page
     where page.check_time is null
       or page.id in (select page_id from incomplete_page)
     order by page.id asc
 )
-select 'pending' as status, (select count(id) from page where id in (select id from want_list)) as count
-union
-select 'done' as status, (select count(id) from page where id not in (select id from want_list)) as count
+, all_list as (
+    select count(id) as count from page
+)
+, count_list as (
+    select
+      'pending' as status
+    , (select count from want_list) as count
+    union
+    select
+      'done' as status
+    , ((select count from all_list) - (select count from want_list)) as count
+)
+select
+  status
+, count
+, printf("%05.2f%", (count * 100.0 / (select count from all_list))) as percentage
+from count_list
