@@ -626,7 +626,9 @@ let published_npm_package_detail_parser = object({
   'versions': dict({
     key: string({ sampleValue: '0.0.1' }),
     value: object({
-      types: optional(string()),
+      types: optional(
+        or([string(), array(string())]) as Parser<string | string[]>,
+      ),
       typings: optional(string()),
       dependencies: optional(
         dict({
@@ -776,7 +778,12 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.deprecated != deprecated)
       npm_package.deprecated = deprecated
 
-    let has_types = !!(version.types || version.typings)
+    let types = version.types
+    if (Array.isArray(types)) {
+      // e.g. npm package: "@arpit09/angular-vanilla" uses empty array in the "types" field
+      types = types.join()
+    }
+    let has_types = !!(types?.trim() || version.typings?.trim())
     if (npm_package.has_types != has_types) npm_package.has_types = has_types
 
     function findAuthor() {
