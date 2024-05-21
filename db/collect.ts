@@ -298,7 +298,10 @@ let nullable_date = nullable(date())
 // FIXME handle case when it is private or deleted
 async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"
-  await page.goto(repo.url)
+  let response = await page.goto(repo.url)
+  if (response?.status() == 429) {
+    console.log('rate limited?', response?.headers())
+  }
   let is_404 = await page.evaluate(() => {
     return !!document.querySelector(
       '[alt="404 “This is not the web page you are looking for”"]',
