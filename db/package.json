@@ -22,7 +22,7 @@
     "better-sqlite3-schema": "^3.1.4",
     "graceful-playwright": "^1.1.9",
     "knex": "^3.1.0",
-    "playwright": "^1.43.1"
+    "playwright": "^1.44.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.10",
