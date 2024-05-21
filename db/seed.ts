@@ -298,7 +298,8 @@ where id = :id
     if ('error' in pkg) continue
     if (!('versions' in pkg)) continue
     let version = pkg.versions[row.version]
-    let deprecated = 'deprecated' in version && version.deprecated != false
+    let deprecated =
+      version && 'deprecated' in version && version.deprecated != false
     update.run({
       id,
       deprecated: deprecated ? 1 : 0,
