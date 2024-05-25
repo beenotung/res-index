@@ -61,8 +61,8 @@ type MatchedNpmPackage = {
   name: string
   username: string
   desc: string | null
+  programming_language: string | null
   weekly_downloads: number | null
-  has_types: number | null
   deprecated: number | null
 }
 
@@ -74,7 +74,6 @@ type MatchedItem = {
   username: string
   weekly_downloads: number | null
   is_fork: number | null
-  has_types: number | null
   deprecated: number | null
 }
 
@@ -84,6 +83,7 @@ function Page(attrs: {}, context: DynamicContext) {
   let host = params.get('host')
   let username = params.get('username')
   let name = params.get('name')
+  let language = params.get('language')
   let prefix = params.get('prefix')
 
   let search_repo_bindings: Record<string, string> = {}
@@ -97,11 +97,16 @@ select
   repo.name
 , repo.desc
 , repo.url
-, programming_language.name as programming_language
+, ifnull(
+    programming_language.name,
+    case npm_package.has_types
+      when 1 then 'Typescript'
+      when 0 then 'Javascript'
+    end)
+  as programming_language
 , author.username
 , repo.is_fork
 , npm_package.deprecated
-, npm_package.has_types
 from repo
 inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
@@ -116,7 +121,10 @@ select
 , author.username
 , npm_package.desc
 , npm_package.weekly_downloads
-, npm_package.has_types
+, case npm_package.has_types
+    when 1 then 'Typescript'
+    when 0 then 'Javascript'
+  end as programming_language
 , npm_package.deprecated
 from npm_package
 left join author on author.id = author_id
@@ -133,6 +141,9 @@ where repo_id is null
     search_repo_bindings.prefix = prefix.toLowerCase() + '%'
     search_npm_package_bindings.prefix = prefix.toLowerCase() + '%'
   }
+
+  // set search bindings for programming languages
+  let language_query = build_language_query(language)
 
   // add bindings for search_repo
   let qs: [string | null, string][] = [
@@ -219,7 +230,7 @@ where repo_id is null
         .all(search_npm_package_bindings)
   for (let npm_package of matchedPackages) {
     // FIXME move to render part to avoid bug when collapsed into prefix pattern?
-    let { name, username, has_types } = npm_package
+    let { name, username } = npm_package
     if (!username && name.startsWith('@')) {
       username = name.split('/')[0].substring(1)
       npm_package.username = username
@@ -231,12 +242,10 @@ where repo_id is null
       name,
       desc: npm_package.desc,
       url: `https://www.npmjs.com/package/${npm_package.name}`,
-      programming_language:
-        has_types == 1 ? 'Typescript' : has_types == 0 ? 'Javascript' : null,
+      programming_language: npm_package.programming_language,
       username,
       weekly_downloads: npm_package.weekly_downloads,
       is_fork: null,
-      has_types: npm_package.has_types,
       deprecated: npm_package.deprecated,
     })
   }
@@ -348,6 +357,14 @@ where repo_id is null
         Repo/Package name:{' '}
         <input name="name" placeholder={'e.g. react event'} value={name} />
       </label>
+      <label>
+        Programming Languages:{' '}
+        <input
+          name="language"
+          placeholder={'e.g. typescript javascript'}
+          value={language}
+        />
+      </label>
       <input type="submit" value="Search" />
       <p class="hint">
         Hint: you can search by multiple keywords, separated by space, e.g.
@@ -359,6 +376,15 @@ where repo_id is null
         "-react -ng- chart" as searching for "chart" libraries while excluding
         those framework-specific libraries having "react" or "ng-" in the name.
       </p>
+      <p class="hint">
+        Hint: multiple keywords are combined with "and" for most fields, but
+        they're combined with "or" for programming languages.
+      </p>
+      <p class="hint">
+        Hint: the keyboards are matched partially for most fields, but is
+        matched exactly for programming languages. So searching "Java" will not
+        match "Javascript" repos.
+      </p>
       {result}
     </form>
   )
@@ -366,14 +392,6 @@ where repo_id is null
 
 function MatchedItem(res: MatchedItem) {
   let { desc, programming_language } = res
-  if (!programming_language) {
-    programming_language =
-      res.has_types == 1
-        ? 'Typescript'
-        : res.has_types == 0
-          ? 'Javascript'
-          : null
-  }
   return (
     <div class="res">
       <div>
@@ -388,6 +406,121 @@ function MatchedItem(res: MatchedItem) {
       {desc ? <div class="res-desc">{desc}</div> : null}
     </div>
   )
+}
+
+function build_language_query(query: string | null) {
+  let sql = ''
+  let bindings: Record<string, string> = {}
+  let count = 0
+  if (query) {
+    query = query.replace(/- +/g, '-')
+    let negative_names: string[] = []
+    let positive_names: string[] = []
+    for (let name of query.split(' ')) {
+      if (!name) continue
+      if (name[0] == '-') {
+        name = name.slice(1)
+        negative_names.push(name)
+      } else {
+        positive_names.push(name)
+      }
+    }
+    if (positive_names.length > 0) {
+      sql = /* sql */ `
+  and (
+       ${positive_names
+         .map(name => {
+           count++
+           let bind = 'l' + count
+           bindings[bind] = name
+           return /* sql */ `programming_language = :${bind}`
+         })
+         .join('\n    or ')}
+  )`
+    }
+    if (negative_names.length > 0) {
+      sql = /* sql */ `
+  and (
+       programming_language is null
+    or (
+          ${negative_names.map(name => {
+            count++
+            let bind = 'l' + count
+            bindings[bind] = name
+            return /* sql */ `programming_language <> :${bind}`
+          })}
+    )
+    or ${negative_names.map(name => {
+      count++
+      let bind = 'l' + count
+      bindings[bind] = name
+      return /* sql */ `programming_language <> :${bind}`
+    })}
+  )`
+    }
+  }
+  return { sql, bindings }
+}
+
+function build_language_query_test() {
+  function test(
+    name: string,
+    query: string,
+    expected: { sql: string; bindings: Record<string, string> },
+  ) {
+    let actual = build_language_query(query)
+    if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+      console.error('[fail]', name, {
+        query,
+        expected,
+        actual,
+      })
+      process.exit(1)
+    }
+    console.log('[pass]', name)
+  }
+  test('empty query', '', { sql: '', bindings: {} })
+  test('single positive language', 'a', {
+    sql: /* sql */ `
+  and (
+       programming_language = :l1
+  )`,
+    bindings: { l1: 'a' },
+  })
+  test('multiple positive languages', 'a b c', {
+    sql: /* sql */ `
+  and (
+       programming_language = :l1
+    or programming_language = :l2
+    or programming_language = :l3
+  )`,
+    bindings: { l1: 'a', l2: 'b', l3: 'c' },
+  })
+  test('single negative language', '-a', {
+    sql: /* sql */ `
+  and (
+       programming_language is null
+    or programming_language <> :l1
+  )`,
+    bindings: { l1: 'a' },
+  })
+  test('multiple negative languages', '-a - b -c', {
+    sql: /* sql */ `
+  and (
+       programming_language is null
+       programming_language <> :l1
+   and 
+    or (
+      and programming_language <> :l2
+      and programming_language <> :l3
+    )
+  )`,
+    bindings: { l1: 'a' },
+  })
+  console.log('all passed')
+}
+if (process.argv[1] == import.meta.filename) {
+  build_language_query_test()
 }
 
 // And it can be pre-rendered into html as well
