@@ -25,6 +25,7 @@ import {
   string,
 } from 'cast.ts'
 import { cleanRepoUrl, parseRepoUrl } from './format'
+import { getLanguageId } from './store'
 
 // TODO get repo list from username (npm package > repo > username > repo list)
 // TODO continues updates each pages
@@ -429,14 +430,7 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
     let forks = nullable_int.parse(res.forks)
     if (repo.forks != forks) repo.forks = forks
 
-    let programming_language_id = !res.programming_language
-      ? null
-      : find(proxy.programming_language, {
-          name: res.programming_language,
-        })?.id ||
-        proxy.programming_language.push({
-          name: res.programming_language,
-        })
+    let programming_language_id = getLanguageId(res.programming_language)
     if (repo.programming_language_id != programming_language_id)
       repo.programming_language_id = programming_language_id
 

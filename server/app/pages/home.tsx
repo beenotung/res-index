@@ -62,7 +62,7 @@ type MatchedNpmPackage = {
   username: string
   desc: string | null
   weekly_downloads: number | null
-  has_types: boolean | null
+  has_types: number | null
   deprecated: number | null
 }
 
@@ -74,6 +74,7 @@ type MatchedItem = {
   username: string
   weekly_downloads: number | null
   is_fork: number | null
+  has_types: number | null
   deprecated: number | null
 }
 
@@ -100,6 +101,7 @@ select
 , author.username
 , repo.is_fork
 , npm_package.deprecated
+, npm_package.has_types
 from repo
 inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
@@ -228,14 +230,11 @@ where repo_id is null
       desc: npm_package.desc,
       url: `https://www.npmjs.com/package/${npm_package.name}`,
       programming_language:
-        has_types == true
-          ? 'Typescript'
-          : has_types == false
-            ? 'Javascript'
-            : null,
+        has_types == 1 ? 'Typescript' : has_types == 0 ? 'Javascript' : null,
       username,
       weekly_downloads: npm_package.weekly_downloads,
       is_fork: null,
+      has_types: npm_package.has_types,
       deprecated: npm_package.deprecated,
     })
   }
@@ -365,6 +364,14 @@ where repo_id is null
 
 function MatchedItem(res: MatchedItem) {
   let { desc, programming_language } = res
+  if (!programming_language) {
+    programming_language =
+      res.has_types == 1
+        ? 'Typescript'
+        : res.has_types == 0
+          ? 'Javascript'
+          : null
+  }
   return (
     <div class="res">
       <div>

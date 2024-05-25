@@ -1,15 +1,14 @@
 import { o } from '../jsx/jsx.js'
 
 export function ProgrammingLanguageSpan(name: string) {
+  if (!name) return
   let code: string
   switch (name) {
-    case undefined:
-      return
-    case 'Typescript':
-      code = 'TS'
+    case 'TypeScript':
+      code = 'Typescript'
       break
-    case 'Javascript':
-      code = 'JS'
+    case 'JavaScript':
+      code = 'Javascript'
       break
     default:
       code = name

@@ -7,6 +7,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
 import { npm_package_detail_parser } from './collect'
+import { getLanguageId } from './store'
 
 // This file serve like the knex seed file.
 //
@@ -20,13 +21,6 @@ function seed_local_repo() {
     db.exec('delete from programming_language')
   }
   // reset()
-
-  function getLanguageId(name: string): number {
-    return (
-      find(proxy.programming_language, { name })?.id ||
-      proxy.programming_language.push({ name })
-    )
-  }
 
   function detectLanguage(dir: string): number | null {
     if (dir.endsWith('DefinitelyTyped')) return getLanguageId('Typescript')
