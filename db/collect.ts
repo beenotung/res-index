@@ -53,7 +53,7 @@ let select_pending_page = db.prepare<
   { id: number; url: string }
 >(/* sql */ `
 with incomplete_page as (
-  select page_id from npm_package where deprecated is null or has_types is null
+  select page_id from npm_package where deprecated is null
   union
   select page_id from repo where is_public is null
 )
@@ -723,12 +723,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   db.transaction(() => {
     /* npm package page */
     page.check_time = now
-    if (
-      page.payload == payload &&
-      npm_package.deprecated != null &&
-      npm_package.has_types != null
-    )
-      return
+    if (page.payload == payload && npm_package.deprecated != null) return
     page.payload = payload
     page.update_time = now
 

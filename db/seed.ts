@@ -103,7 +103,7 @@ function seed_local_repo() {
 }
 seed_local_repo()
 
-function fix_npm_detail() {
+function fix_npm_page_url() {
   let prefix = 'https://www.npmjs.com/package/'
   let pages = db.query<{ id: number; url: string }>(
     `select id, url from page where url like '${prefix}%'`,
@@ -131,7 +131,41 @@ function fix_npm_detail() {
     update_page_url.run({ id: page.id, new_url })
   }
 }
-fix_npm_detail()
+fix_npm_page_url()
+
+function set_npm_package__has_types() {
+  let rows = db
+    .prepare<void[], { id: number; payload: string }>(
+      /* sql */ `
+select
+  npm_package.id
+, page.payload
+from npm_package
+inner join page on page.id = npm_package.page_id
+where npm_package.has_types is null
+  and page.payload is not null
+`,
+    )
+    .all()
+  for (let row of rows) {
+    let json = JSON.parse(row.payload)
+    let pkg = npm_package_detail_parser.parse(json)
+    if (!('versions' in pkg)) continue
+    let version_name = pkg['dist-tags']?.latest
+    if (!version_name) continue
+    let version = pkg.versions[version_name]
+    if (!version) continue
+
+    let types = version.types
+    if (Array.isArray(types)) {
+      types = types.join()
+    }
+
+    let has_types = !!(types?.trim() || version.typings?.trim())
+    proxy.npm_package[row.id].has_types = has_types
+  }
+}
+set_npm_package__has_types()
 
 function fix_npm_download() {
   let prefix = 'https://api.npmjs.org/downloads/point/last-day/'
