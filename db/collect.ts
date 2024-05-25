@@ -373,6 +373,7 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
         `.Layout-sidebar a[href="${location.pathname}/forks"] strong`,
       )?.textContent || null
 
+    // FIXME check why it is null for some repo, e.g. https://github.com/beenotung/knex
     let programming_language =
       document.querySelector(
         // e.g. "/beenotung/ts-liveview/search?l=typescript"
