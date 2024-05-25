@@ -1,6 +1,6 @@
 import { o } from '../jsx/jsx.js'
 
-export function ProgrammingLanguageSpan(name: string) {
+export function ProgrammingLanguageSpan(name: string | null) {
   if (!name) return
   let code: string
   switch (name) {

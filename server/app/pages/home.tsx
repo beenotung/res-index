@@ -375,9 +375,7 @@ function MatchedItem(res: MatchedItem) {
   return (
     <div class="res">
       <div>
-        {programming_language
-          ? ProgrammingLanguageSpan(programming_language)
-          : null}
+        {ProgrammingLanguageSpan(programming_language)}
         <b>{res.name}</b> {res.deprecated ? <span>(deprecated)</span> : null}{' '}
         {res.username ? <sub>by {res.username}</sub> : null}{' '}
         {res.is_fork ? <sub>(fork)</sub> : null}{' '}
