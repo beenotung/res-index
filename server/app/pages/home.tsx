@@ -72,6 +72,7 @@ type MatchedItem = {
   programming_language: string | null
   username: string
   weekly_downloads: number | null
+  is_fork: number | null
 }
 
 function Page(attrs: {}, context: DynamicContext) {
@@ -95,6 +96,7 @@ select
 , repo.url
 , programming_language.name as programming_language
 , author.username
+, repo.is_fork
 from repo
 inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
@@ -229,6 +231,7 @@ where deprecated = 0
             : null,
       username,
       weekly_downloads: npm_package.weekly_downloads,
+      is_fork: null,
     })
   }
 
@@ -363,7 +366,8 @@ function MatchedItem(res: MatchedItem) {
         {programming_language
           ? ProgrammingLanguageSpan(programming_language)
           : null}
-        <b>{res.name}</b> {res.username ? <sub>by {res.username}</sub> : null}
+        <b>{res.name}</b> {res.username ? <sub>by {res.username}</sub> : null}{' '}
+        {res.is_fork ? <sub>(fork)</sub> : null}
       </div>
       <a target="_blank" href={res.url}>
         {res.url}
