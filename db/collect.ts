@@ -776,6 +776,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       )
 
     let create_time = packageTime.created?.getTime() || null
+    if (npm_package.create_time != create_time)
+      npm_package.create_time = create_time
 
     let deprecated = 'deprecated' in version && version.deprecated != false
     if (npm_package.deprecated != deprecated)
@@ -804,9 +806,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     let author = findAuthor()
     let author_id = author ? getAuthorId(author) : null
     if (npm_package.author_id !== author_id) npm_package.author_id = author_id
-
-    if (npm_package.create_time != create_time)
-      npm_package.create_time = create_time
 
     if (npm_package.version != version_name) npm_package.version = version_name
 
