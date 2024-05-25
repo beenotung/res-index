@@ -110,7 +110,7 @@ select
 , npm_package.weekly_downloads
 , npm_package.has_types
 from npm_package
-inner join author on author.id = author_id
+left join author on author.id = author_id
 where deprecated = 0
   and repo_id is null
 `
@@ -210,6 +210,10 @@ where deprecated = 0
   for (let npm_package of matchedPackages) {
     // FIXME move to render part to avoid bug when collapsed into prefix pattern?
     let { name, username, has_types } = npm_package
+    if (!username && name.startsWith('@')) {
+      username = name.split('/')[0].substring(1)
+      npm_package.username = username
+    }
     if (name.startsWith('@' + username)) {
       name = name.substring(username.length + 2)
     }
@@ -359,7 +363,7 @@ function MatchedItem(res: MatchedItem) {
         {programming_language
           ? ProgrammingLanguageSpan(programming_language)
           : null}
-        <b>{res.name}</b> <sub>by {res.username}</sub>
+        <b>{res.name}</b> {res.username ? <sub>by {res.username}</sub> : null}
       </div>
       <a target="_blank" href={res.url}>
         {res.url}
