@@ -63,6 +63,7 @@ type MatchedNpmPackage = {
   desc: string | null
   weekly_downloads: number | null
   has_types: boolean | null
+  deprecated: number | null
 }
 
 type MatchedItem = {
@@ -73,6 +74,7 @@ type MatchedItem = {
   username: string
   weekly_downloads: number | null
   is_fork: number | null
+  deprecated: number | null
 }
 
 function Page(attrs: {}, context: DynamicContext) {
@@ -97,10 +99,12 @@ select
 , programming_language.name as programming_language
 , author.username
 , repo.is_fork
+, npm_package.deprecated
 from repo
 inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
 left join programming_language on programming_language.id = repo.programming_language_id
+left join npm_package on npm_package.repo_id = repo.id
 where repo.is_public = 1
 `
 
@@ -111,10 +115,10 @@ select
 , npm_package.desc
 , npm_package.weekly_downloads
 , npm_package.has_types
+, npm_package.deprecated
 from npm_package
 left join author on author.id = author_id
-where deprecated = 0
-  and repo_id is null
+where repo_id is null
 `
 
   if (prefix) {
@@ -232,6 +236,7 @@ where deprecated = 0
       username,
       weekly_downloads: npm_package.weekly_downloads,
       is_fork: null,
+      deprecated: npm_package.deprecated,
     })
   }
 
@@ -366,8 +371,9 @@ function MatchedItem(res: MatchedItem) {
         {programming_language
           ? ProgrammingLanguageSpan(programming_language)
           : null}
-        <b>{res.name}</b> {res.username ? <sub>by {res.username}</sub> : null}{' '}
-        {res.is_fork ? <sub>(fork)</sub> : null}
+        <b>{res.name}</b> {res.deprecated ? <span>(deprecated)</span> : null}{' '}
+        {res.username ? <sub>by {res.username}</sub> : null}{' '}
+        {res.is_fork ? <sub>(fork)</sub> : null}{' '}
       </div>
       <a target="_blank" href={res.url}>
         {res.url}
