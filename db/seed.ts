@@ -133,6 +133,40 @@ function fix_npm_page_url() {
 }
 fix_npm_page_url()
 
+function getNpmPackageLatestVersion(payload: string) {
+  let json = JSON.parse(payload)
+  let pkg = npm_package_detail_parser.parse(json)
+  if (!('versions' in pkg)) return
+  let version_name = pkg['dist-tags']?.latest
+  if (!version_name) return
+  let version = pkg.versions[version_name]
+  return version
+}
+
+function set_npm_package__deprecated() {
+  let rows = db
+    .prepare<void[], { id: number; payload: string }>(
+      /* sql */ `
+select
+  npm_package.id
+, page.payload
+from npm_package
+inner join page on page.id = npm_package.page_id
+where npm_package.deprecated is null
+  and page.payload is not null
+`,
+    )
+    .all()
+  for (let row of rows) {
+    let version = getNpmPackageLatestVersion(row.payload)
+    if (!version) continue
+
+    let deprecated = 'deprecated' in version && version.deprecated != false
+    proxy.npm_package[row.id].deprecated = deprecated
+  }
+}
+set_npm_package__deprecated()
+
 function set_npm_package__has_types() {
   let rows = db
     .prepare<void[], { id: number; payload: string }>(
@@ -148,12 +182,7 @@ where npm_package.has_types is null
     )
     .all()
   for (let row of rows) {
-    let json = JSON.parse(row.payload)
-    let pkg = npm_package_detail_parser.parse(json)
-    if (!('versions' in pkg)) continue
-    let version_name = pkg['dist-tags']?.latest
-    if (!version_name) continue
-    let version = pkg.versions[version_name]
+    let version = getNpmPackageLatestVersion(row.payload)
     if (!version) continue
 
     let types = version.types
