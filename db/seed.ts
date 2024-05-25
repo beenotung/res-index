@@ -97,6 +97,35 @@ function seed_local_repo() {
 }
 seed_local_repo()
 
+function fix_language_name() {
+  let update_programming_language_id = db.prepare<{
+    from: string
+    to: string
+  }>(/* sql */ `
+update repo
+  set programming_language_id = (select id from programming_language where name = :to)
+where programming_language_id = (select id from programming_language where name = :from)
+`)
+  let delete_statement = db.prepare<{ from: string }>(/* sql */ `
+delete from programming_language
+where name = :from
+`)
+  let reset_sequence = db.prepare(/* sql */ `
+update sqlite_sequence
+set seq = 1
+`)
+  function fix(options: { from: string; to: string }) {
+    if (!find(proxy.programming_language, { name: options.from })) return
+    getLanguageId(options.to)
+    update_programming_language_id.run(options)
+    delete_statement.run(options)
+    reset_sequence.run()
+  }
+  fix({ from: 'TypeScript', to: 'Typescript' })
+  fix({ from: 'JavaScript', to: 'Javascript' })
+}
+fix_language_name()
+
 function fix_npm_page_url() {
   let prefix = 'https://www.npmjs.com/package/'
   let pages = db.query<{ id: number; url: string }>(
