@@ -142,6 +142,7 @@ where repo_id is null
   ]
   for (let [value, field] of qs) {
     if (value) {
+      value = value.replace(/- +/g, '-')
       for (let part of value.split(' ')) {
         part = part.trim()
         if (!part) continue
@@ -169,6 +170,7 @@ where repo_id is null
   ]
   for (let [value, field] of qs) {
     if (value) {
+      value = value.replace(/- +/g, '-')
       for (let part of value.split(' ')) {
         search_npm_package_bind_count++
         let bind = 'b' + search_npm_package_bind_count
