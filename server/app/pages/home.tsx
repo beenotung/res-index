@@ -10,6 +10,7 @@ import { ProgrammingLanguageSpan } from '../components/programming-language.js'
 import { Link } from '../components/router.js'
 import { nodeToVNode } from '../jsx/vnode.js'
 import { Element } from '../jsx/types.js'
+import { newDB } from 'better-sqlite3-schema'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -77,8 +78,7 @@ type MatchedItem = {
   deprecated: number | null
 }
 
-function Page(attrs: {}, context: DynamicContext) {
-  let params = new URLSearchParams(context.routerMatch?.search)
+function build_search_query(params: URLSearchParams) {
   let action = params.get('action')
   let host = params.get('host')
   let username = params.get('username')
@@ -141,9 +141,6 @@ where repo_id is null
     search_repo_bindings.prefix = prefix.toLowerCase() + '%'
     search_npm_package_bindings.prefix = prefix.toLowerCase() + '%'
   }
-
-  // set search bindings for programming languages
-  let language_query = build_language_query(language)
 
   // add bindings for search_repo
   let qs: [string | null, string][] = [
@@ -219,15 +216,74 @@ where repo_id is null
     skip_npm ||= include_other && !include_npm
   }
 
-  let matchedItems = db
-    .prepare<{}, MatchedItem>(search_repo_sql)
-    .all(search_repo_bindings)
+  // set search bindings for programming languages
+  if (language) {
+    let positive_languages: string[] = []
+    let negative_languages: string[] = []
+    language = language.replace(/- +/g, '-')
+    for (let name of language.split(' ')) {
+      if (!name) continue
+      if (name[0] == '-') {
+        name = name.slice(1)
+        negative_languages.push(name)
+      } else {
+        positive_languages.push(name)
+      }
+    }
+    if (positive_languages.length > 0) {
+      search_repo_sql += /* sql */ `
+  and (${positive_languages
+    .map(name => {
+      search_repo_bind_count++
+      let bind = 'b' + search_repo_bind_count
+      search_repo_bindings[bind] = name
+      return `programming_language like :${bind}`
+    })
+    .join(' or ')})
+`
+    }
+    if (negative_languages.length > 0) {
+      for (let name of negative_languages) {
+        search_repo_bind_count++
+        let bind = 'b' + search_repo_bind_count
+        search_repo_bindings[bind] = name
+        search_repo_sql += /* sql */ `
+  and (programming_language not like :${bind} or programming_language is null)
+`
+      }
+    }
+  }
 
-  let matchedPackages = skip_npm
+  return {
+    search_repo_sql,
+    search_repo_bindings,
+    skip_npm,
+    search_npm_package_sql,
+    search_npm_package_bindings,
+    /* from params */
+    action,
+    host,
+    username,
+    name,
+    language,
+    prefix,
+  }
+}
+
+function Page(attrs: {}, context: DynamicContext) {
+  let params = new URLSearchParams(context.routerMatch?.search)
+  let query = build_search_query(params)
+  let { action, host, username, name, language, prefix } = query
+
+  let matchedItems = db
+    .prepare<{}, MatchedItem>(query.search_repo_sql)
+    .all(query.search_repo_bindings)
+
+  let matchedPackages = query.skip_npm
     ? []
     : db
-        .prepare<{}, MatchedNpmPackage>(search_npm_package_sql)
-        .all(search_npm_package_bindings)
+        .prepare<{}, MatchedNpmPackage>(query.search_npm_package_sql)
+        .all(query.search_npm_package_bindings)
   for (let npm_package of matchedPackages) {
     // FIXME move to render part to avoid bug when collapsed into prefix pattern?
     let { name, username } = npm_package
@@ -408,70 +464,102 @@ function MatchedItem(res: MatchedItem) {
   )
 }
 
-function build_language_query(query: string | null) {
-  let sql = ''
-  let bindings: Record<string, string> = {}
-  let count = 0
-  if (query) {
-    query = query.replace(/- +/g, '-')
-    let negative_names: string[] = []
-    let positive_names: string[] = []
-    for (let name of query.split(' ')) {
-      if (!name) continue
-      if (name[0] == '-') {
-        name = name.slice(1)
-        negative_names.push(name)
-      } else {
-        positive_names.push(name)
-      }
-    }
-    if (positive_names.length > 0) {
-      sql = /* sql */ `
-  and (
-       ${positive_names
-         .map(name => {
-           count++
-           let bind = 'l' + count
-           bindings[bind] = name
-           return /* sql */ `programming_language = :${bind}`
-         })
-         .join('\n    or ')}
-  )`
-    }
-    if (negative_names.length > 0) {
-      sql = /* sql */ `
-  and (
-       programming_language is null
-    or (
-          ${negative_names.map(name => {
-            count++
-            let bind = 'l' + count
-            bindings[bind] = name
-            return /* sql */ `programming_language <> :${bind}`
-          })}
+function build_search_query_test() {
+  let schema = db
+    .prepare<void[], { name: string; sql: string }>(
+      /* sql */ `
+select name, sql from sqlite_master
+where type = 'table'
+  and name not like 'knex%'
+  and name <> 'sqlite_sequence'
+`,
     )
-    or ${negative_names.map(name => {
-      count++
-      let bind = 'l' + count
-      bindings[bind] = name
-      return /* sql */ `programming_language <> :${bind}`
-    })}
-  )`
+    .all()
+
+  let testDB = newDB({
+    memory: true,
+    migrate: false,
+  })
+  for (let row of schema) {
+    testDB.prepare(row.sql).run()
+  }
+
+  function seedTable(table: string, field: string, value: string) {
+    let id = testDB.queryFirstCell(
+      `select id from ${table} where ${field} = ?`,
+      value,
+    )
+    if (!id) {
+      id = testDB.insert(table, { [field]: value })
+    }
+    return id
+  }
+
+  function seedRepo(id: number, url: string, programming_language: string) {
+    // e.g. [ 'https:', '', 'github.com', 'beenotung', 'create-ts-liveview' ]
+    let parts = url.split('/')
+    let host = parts[2]
+    let username = parts[3]
+    let name = parts[4]
+    testDB.insert('page', {
+      id,
+      url,
+    })
+    testDB.insert('repo', {
+      id,
+      page_id: id,
+      domain_id: seedTable('domain', 'host', host),
+      author_id: seedTable('author', 'username', username),
+      programming_language_id: seedTable(
+        'programming_language',
+        'name',
+        programming_language,
+      ),
+      is_public: 1,
+      name,
+      url,
+    })
+    return {
+      name,
+      desc: null,
+      url,
+      programming_language,
+      username,
+      is_fork: null,
+      deprecated: null,
     }
   }
-  return { sql, bindings }
-}
+  let samples = [
+    seedRepo(
+      1,
+      'https://github.com/beenotung/create-ts-liveview',
+      'Javascript',
+    ),
+    seedRepo(2, 'https://github.com/beenotung/ts-liveview', 'Typescript'),
+    seedRepo(
+      3,
+      'https://github.com/beenotung/better-sqlite3-proxy',
+      'Typescript',
+    ),
+    seedRepo(4, 'https://github.com/beenotung/net-files', 'HTML'),
+    seedRepo(5, 'https://github.com/beenotung/safepic', 'HTML'),
+    seedRepo(6, 'https://github.com/beenotung/ga-experiment', 'Java'),
+    seedRepo(7, 'https://github.com/beenotung/vue-datepicker', 'Vue'),
+    seedRepo(8, 'https://github.com/beenotung/sodoku', 'C'),
+    seedRepo(9, 'https://github.com/beenotung/fair-task-task', 'Typescript'),
+  ]
 
-function build_language_query_test() {
-  function test(
-    name: string,
-    query: string,
-    expected: { sql: string; bindings: Record<string, string> },
-  ) {
-    let actual = build_language_query(query)
-    if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+  function test(name: string, language: string, expected: any[]) {
+    let params = new URLSearchParams()
+    params.set('language', language)
+    let query = build_search_query(params)
+
+    let actual = testDB
+      .prepare(query.search_repo_sql)
+      .all(query.search_repo_bindings)
+
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
       console.error('[fail]', name, {
-        query,
         expected,
         actual,
       })
@@ -479,48 +567,45 @@ function build_language_query_test() {
     }
     console.log('[pass]', name)
   }
-  test('empty query', '', { sql: '', bindings: {} })
-  test('single positive language', 'a', {
-    sql: /* sql */ `
-  and (
-       programming_language = :l1
-  )`,
-    bindings: { l1: 'a' },
-  })
-  test('multiple positive languages', 'a b c', {
-    sql: /* sql */ `
-  and (
-       programming_language = :l1
-    or programming_language = :l2
-    or programming_language = :l3
-  )`,
-    bindings: { l1: 'a', l2: 'b', l3: 'c' },
-  })
-  test('single negative language', '-a', {
-    sql: /* sql */ `
-  and (
-       programming_language is null
-    or programming_language <> :l1
-  )`,
-    bindings: { l1: 'a' },
-  })
-  test('multiple negative languages', '-a - b -c', {
-    sql: /* sql */ `
-  and (
-       programming_language is null
-       programming_language <> :l1
-   and 
-    or (
-      and programming_language <> :l2
-      and programming_language <> :l3
-    )
-  )`,
-    bindings: { l1: 'a' },
-  })
+  test('empty query', '', samples)
+  test(
+    'single positive language',
+    'Typescript',
+    samples.filter(repo => repo.programming_language == 'Typescript'),
+  )
+  test(
+    'multiple positive languages',
+    'Typescript Javascript',
+    samples.filter(
+      repo =>
+        repo.programming_language == 'Typescript' ||
+        repo.programming_language == 'Javascript',
+    ),
+  )
+  test(
+    'single negative language',
+    '-Javascript',
+    samples.filter(repo => repo.programming_language != 'Javascript'),
+  )
+  test(
+    'multiple negative languages',
+    '-Typescript - Javascript -Java',
+    samples.filter(
+      repo =>
+        repo.programming_language != 'Typescript' &&
+        repo.programming_language != 'Javascript' &&
+        repo.programming_language != 'Java',
+    ),
+  )
+  test(
+    'mixed positive and negative languages',
+    'Typescript - Javascript',
+    samples.filter(repo => repo.programming_language == 'Typescript'),
+  )
   console.log('all passed')
 }
 if (process.argv[1] == import.meta.filename) {
-  build_language_query_test()
+  build_search_query_test()
 }
 
 // And it can be pre-rendered into html as well
