@@ -842,7 +842,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         ? pkg.repository
         : pkg.repository?.url || null
     // e.g. "Glimpse/Home"
-    if (repository?.split('/').length == 2) {
+    if (!repository?.startsWith('git@') && repository?.split('/').length == 2) {
       if (pkg.bugs) {
         repository = null
       } else {

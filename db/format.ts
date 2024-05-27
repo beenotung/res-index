@@ -59,7 +59,8 @@ export function cleanRepoUrl(url: string): string | null {
   }
 
   // e.g. "git@github.com:maleck13/readline"
-  let match = url.match(/^git@(.*):(.*)/)
+  // e.g. "git@gitlab.beisencorp.com:ux-cnpm/calendar.git"
+  let match = url.replace(/\.git$/, '').match(/^git@(.*):(.*)/)
   if (match) {
     url = 'https://' + match[1] + '/' + match[2]
   }
