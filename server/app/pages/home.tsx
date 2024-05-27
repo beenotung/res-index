@@ -84,6 +84,7 @@ function build_search_query(params: URLSearchParams) {
   let username = params.get('username')
   let name = params.get('name')
   let language = params.get('language')
+  let desc = params.get('desc')
   let prefix = params.get('prefix')
 
   let search_repo_bindings: Record<string, string> = {}
@@ -147,6 +148,7 @@ where repo_id is null
     [host, 'domain.host'],
     [username, 'author.username'],
     [name, 'repo.name'],
+    [desc, 'repo.desc'],
   ]
   for (let [value, field] of qs) {
     if (value) {
@@ -175,6 +177,7 @@ where repo_id is null
   qs = [
     [username, 'author.username'],
     [name, 'npm_package.name'],
+    [desc, 'npm_package.desc'],
   ]
   for (let [value, field] of qs) {
     if (value) {
@@ -266,6 +269,7 @@ where repo_id is null
     username,
     name,
     language,
+    desc,
     prefix,
   }
 }
@@ -429,6 +433,10 @@ function Page(attrs: {}, context: DynamicContext) {
           placeholder={'e.g. typescript javascript'}
           value={query.language}
         />
+      </label>
+      <label>
+        Description:{' '}
+        <input name="desc" placeholder={'e.g. 倉頡'} value={query.desc} />
       </label>
       <input type="submit" value="Search" />
       <p class="hint">
