@@ -841,14 +841,18 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       typeof pkg.repository == 'string'
         ? pkg.repository
         : pkg.repository?.url || null
-    // e.g. "Glimpse/Home"
     if (!repository?.startsWith('git@') && repository?.split('/').length == 2) {
+      // e.g. "Glimpse/Home"
       if (pkg.bugs) {
         repository = null
       } else {
         console.error('short form of github repo?', pkg.repository)
         throw new Error('invalid repository')
       }
+    }
+    if (repository == 'URL_OF_YOUR_REPOSITORY') {
+      // e.g. "terra-component-lib"
+      repository = null
     }
     if (repository == 'git+') {
       // e.g. npm package: "post-or-save-package"
