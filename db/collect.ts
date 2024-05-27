@@ -837,33 +837,27 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       typeof pkg.repository == 'string'
         ? pkg.repository
         : pkg.repository?.url || null
+    // e.g. "Glimpse/Home"
+    if (repository?.split('/').length == 2) {
+      if (pkg.bugs) {
+        repository = null
+      } else {
+        console.error('short form of github repo?', pkg.repository)
+        throw new Error('invalid repository')
+      }
+    }
     if (repository == 'git+') {
       // e.g. npm package: "post-or-save-package"
       repository = null
     }
-    if (!repository && typeof pkg.repository == 'object') {
-      if (pkg.repository.url == '') {
-        // seems to be intentionally removed
-        // e.g. npm package: "@silent-killer/killer-spotify-searching"
-      } else if (pkg.bugs) {
-        let url = typeof pkg.bugs == 'string' ? pkg.bugs : pkg.bugs.url
-        // e.g. "https://github.com/azawakh/twsh/issue"
-        // e.g. "https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen"
-        let parts = url.split('/')
-        if (parts.length == 6) {
-          parts.pop()
-          repository = parts.join('/')
-        }
-      } else {
-        let keys = Object.keys(pkg.repository)
-        if (keys.length == 1 && pkg.repository.type == 'git') {
-          // missing repository url intentionally?
-        } else {
-          // repository url not specified
-          // throw new Error(
-          //   'failed to find npm package repository url, name: ' + pkg.name,
-          // )
-        }
+    if (!repository && pkg.bugs) {
+      let url = typeof pkg.bugs == 'string' ? pkg.bugs : pkg.bugs.url
+      // e.g. "https://github.com/azawakh/twsh/issue"
+      // e.g. "https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen"
+      let parts = url.split('/')
+      if (parts.length == 6) {
+        parts.pop()
+        repository = parts.join('/')
       }
     }
     let repo_url = repository ? cleanRepoUrl(repository) : null
