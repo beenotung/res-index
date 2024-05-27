@@ -273,7 +273,7 @@ where repo_id is null
 function Page(attrs: {}, context: DynamicContext) {
   let params = new URLSearchParams(context.routerMatch?.search)
   let query = build_search_query(params)
-  let { action, host, username, name, language, prefix } = query
+  let { prefix } = query
 
   let matchedItems = db
     .prepare<{}, MatchedItem>(query.search_repo_sql)
@@ -395,7 +395,7 @@ function Page(attrs: {}, context: DynamicContext) {
       </div>,
     ],
   ]
-  if (action == 'search' && context.type == 'ws') {
+  if (query.action == 'search' && context.type == 'ws') {
     context.ws.send(['update', nodeToVNode(result, context)])
     throw EarlyTerminate
   }
@@ -403,22 +403,31 @@ function Page(attrs: {}, context: DynamicContext) {
     <form onsubmit="emitForm(event)" id="searchForm">
       <input name="action" value="search" hidden />
       <label>
-        Repo Host: <input name="host" placeholder="e.g. npmjs" value={host} />
+        Repo Host:{' '}
+        <input name="host" placeholder="e.g. npmjs" value={query.host} />
       </label>
       <label>
         Username:{' '}
-        <input name="username" placeholder="e.g. beeno" value={username} />
+        <input
+          name="username"
+          placeholder="e.g. beeno"
+          value={query.username}
+        />
       </label>
       <label>
         Repo/Package name:{' '}
-        <input name="name" placeholder={'e.g. react event'} value={name} />
+        <input
+          name="name"
+          placeholder={'e.g. react event'}
+          value={query.name}
+        />
       </label>
       <label>
         Programming Languages:{' '}
         <input
           name="language"
           placeholder={'e.g. typescript javascript'}
-          value={language}
+          value={query.language}
         />
       </label>
       <input type="submit" value="Search" />
