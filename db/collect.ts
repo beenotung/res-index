@@ -639,10 +639,14 @@ let published_npm_package_detail_parser = object({
         }),
       ),
       peerDependencies: optional(
-        dict({
-          key: string({ sampleValue: 'better-sqlite3' }),
-          value: nullable(string({ sampleValue: '^7.1.0' })),
-        }),
+        or([
+          dict({
+            key: string({ sampleValue: 'better-sqlite3' }),
+            value: nullable(string({ sampleValue: '^7.1.0' })),
+          }),
+          // invalid setup in eslint-config-canonical
+          string(),
+        ]) as Parser<Record<string, string | null> | string>,
       ),
       optionalDependencies: optional(
         dict({
@@ -933,7 +937,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     /* dependencies */
     storeDeps('prod', version.dependencies)
     storeDeps('dev', version.devDependencies)
-    storeDeps('peer', version.peerDependencies)
+    if (typeof version.peerDependencies != 'string') {
+      storeDeps('peer', version.peerDependencies)
+    }
     storeDeps('optional', version.optionalDependencies)
     function storeDeps(
       type: NpmPackageDependency['type'],
