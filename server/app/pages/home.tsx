@@ -257,6 +257,14 @@ where repo_id is null
     }
   }
 
+  // avoid duplicated records due to join tables
+  search_repo_sql += /* sql */ `
+group by repo.id
+`
+  search_npm_package_sql += /* sql */ `
+group by npm_package.id
+`
+
   return {
     search_repo_sql,
     search_repo_bindings,
