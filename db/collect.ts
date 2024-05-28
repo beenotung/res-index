@@ -845,6 +845,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       // e.g. "/sand-common" for the npm package "sand-common"
       repository = null
     }
+    if (repository?.startsWith('@') && repository.split('/').length == 2) {
+      // e.g. "@buidly/sdk-dapp-with-lythra"
+      repository = null
+    }
     if (!repository?.startsWith('git@') && repository?.split('/').length == 2) {
       // e.g. "Glimpse/Home"
       if (pkg.bugs) {
