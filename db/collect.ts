@@ -859,7 +859,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       // e.g. npm package: "post-or-save-package"
       repository = null
     }
-    if (repository?.match(/^[\w-]+\/[\w-]+$/) && pkg.bugs) {
+    if (repository?.match(/^[\w-.]+\/[\w-.]+$/) && pkg.bugs) {
       // e.g. "Glimpse/Home"
       repository = null
     }

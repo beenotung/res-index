@@ -12,7 +12,7 @@ export function cleanRepoUrl(url: string): string | null {
   }
 
   // e.g. "lukeed/sirv"
-  if (url.match(/^[\w-]+\/[\w-]+$/)) {
+  if (url.match(/^[\w-.]+\/[\w-.]+$/)) {
     url = 'https://github.com/' + url
   }
 
