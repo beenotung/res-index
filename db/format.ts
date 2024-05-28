@@ -58,17 +58,20 @@ export function cleanRepoUrl(url: string): string | null {
     return null
   }
 
-  // e.g. "git@github.com:maleck13/readline"
   // e.g. "git@gitlab.beisencorp.com:ux-cnpm/calendar.git"
-  let match = url.replace(/\.git$/, '').match(/^git@(.*):(.*)/)
-  if (match) {
-    url = 'https://' + match[1] + '/' + match[2]
+  if (url.endsWith('.git')) {
+    url = url.replace(/\.git$/, '')
+  }
+
+  // e.g. "git@github.com:maleck13/readline"
+  if (url.startsWith('git@')) {
+    url = url.replace('git@', '')
   }
 
   // e.g. "github:Azure/azure-sdk-for-js"
-  // e.g. "bitbucket.org:mysearchbot/traverz-core-ui.git"
-  if (url.split(':').length == 2 && url.split('/').length == 2) {
-    url = 'https://' + url.replace(':', '/').replace(/\.git$/, '')
+  let match = url.match(/^(.*):(.*)$/)
+  if (match) {
+    url = 'https://' + match[1] + '/' + match[2]
   }
 
   let parts = url.split('/')
