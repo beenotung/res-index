@@ -87,6 +87,11 @@ export function cleanRepoUrl(url: string): string | null {
     parts = url.split('/')
   }
 
+  // e.g. "Luiz Didier/firebox-components"
+  if (url.includes(' ')) {
+    return null
+  }
+
   if (!url.startsWith('https://')) {
     // e.g. git over ssh?
     throw new Error('Invalid repository url: ' + url)
