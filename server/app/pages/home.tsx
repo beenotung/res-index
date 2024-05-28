@@ -196,7 +196,6 @@ where repo_id is null
   ]
   for (let [value, field] of qs) {
     if (value) {
-      value = value.replace(/- +/g, '-')
       for (let part of value.split(' ')) {
         part = part.trim()
         if (!part) continue
@@ -229,7 +228,6 @@ where repo_id is null
   ]
   for (let [value, field] of qs) {
     if (value) {
-      value = value.replace(/- +/g, '-')
       for (let part of value.split(' ')) {
         search_npm_package_bind_count++
         let bind = 'b' + search_npm_package_bind_count
@@ -275,7 +273,6 @@ where repo_id is null
   if (language) {
     let positive_languages: string[] = []
     let negative_languages: string[] = []
-    language = language.replace(/- +/g, '-')
     for (let name of language.split(' ')) {
       if (!name) continue
       if (name[0] == '-') {
@@ -645,12 +642,23 @@ where type = 'table'
     seedRepo(6, 'https://github.com/beenotung/ga-experiment', 'Java'),
     seedRepo(7, 'https://github.com/beenotung/vue-datepicker', 'Vue'),
     seedRepo(8, 'https://github.com/beenotung/sodoku', 'C'),
-    seedRepo(9, 'https://github.com/beenotung/fair-task-task', 'Typescript'),
+    seedRepo(9, 'https://github.com/beenotung/fair-task-pool', 'Typescript'),
+    seedRepo(10, 'https://github.com/valor-software/ng2-charts', 'Typescript'),
+    seedRepo(11, 'https://github.com/help-me-mom/ng-mocks', 'Typescript'),
+    seedRepo(12, 'https://github.com/DethAriel/ng-recaptcha', 'Typescript'),
   ]
 
-  function test(name: string, language: string, expected: any[]) {
-    let params = new URLSearchParams()
-    params.set('language', language)
+  function testLanguage(name: string, language: string, expected: any[]) {
+    name = `[Language TestSuit] ${name}`
+    let params = new URLSearchParams({ language })
+    test(name, params, expected)
+  }
+  function testName(name: string, repoName: string, expected: any[]) {
+    name = `[Name TestSuit] ${name}`
+    let params = new URLSearchParams({ name: repoName })
+    test(name, params, expected)
+  }
+  function test(name: string, params: URLSearchParams, expected: any[]) {
     let query = build_search_query(params)
 
     let actual = testDB
@@ -666,13 +674,13 @@ where type = 'table'
     }
     console.log('[pass]', name)
   }
-  test('empty query', '', samples)
-  test(
+  testLanguage('empty query', '', samples)
+  testLanguage(
     'single positive language',
     'Typescript',
     samples.filter(repo => repo.programming_language == 'Typescript'),
   )
-  test(
+  testLanguage(
     'multiple positive languages',
     'Typescript Javascript',
     samples.filter(
@@ -681,14 +689,14 @@ where type = 'table'
         repo.programming_language == 'Javascript',
     ),
   )
-  test(
+  testLanguage(
     'single negative language',
     '-Javascript',
     samples.filter(repo => repo.programming_language != 'Javascript'),
   )
-  test(
+  testLanguage(
     'multiple negative languages',
-    '-Typescript - Javascript -Java',
+    '-Typescript -Javascript -Java',
     samples.filter(
       repo =>
         repo.programming_language != 'Typescript' &&
@@ -696,10 +704,51 @@ where type = 'table'
         repo.programming_language != 'Java',
     ),
   )
-  test(
+  testLanguage(
     'mixed positive and negative languages',
-    'Typescript - Javascript',
+    'Typescript -Javascript',
     samples.filter(repo => repo.programming_language == 'Typescript'),
+  )
+  testName(
+    'single keyword',
+    'ga',
+    samples.filter(repo => repo.name.includes('ga')),
+  )
+  testName(
+    'multiple keywords',
+    'net files',
+    samples.filter(
+      repo => repo.name.includes('net') && repo.name.includes('files'),
+    ),
+  )
+  testName(
+    'negative keyword',
+    '-ng',
+    samples.filter(repo => !repo.name.includes('ng')),
+  )
+  testName(
+    'positive keyword with hyphen suffix',
+    'ng-',
+    samples.filter(repo => repo.name.includes('ng-')),
+  )
+  testName(
+    'negative keyword with hyphen suffix',
+    '-ng-',
+    samples.filter(repo => !repo.name.includes('ng-')),
+  )
+  testName(
+    'multiple keywords with hyphen suffix (continue)',
+    'ng- mock',
+    samples.filter(
+      repo => repo.name.includes('ng-') && repo.name.includes('mock'),
+    ),
+  )
+  testName(
+    'multiple keywords with hyphen suffix (separated)',
+    'fair- pool',
+    samples.filter(
+      repo => repo.name.includes('fair-') && repo.name.includes('pool'),
+    ),
   )
   console.log('all passed')
 }
