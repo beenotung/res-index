@@ -668,7 +668,9 @@ let published_npm_package_detail_parser = object({
   }),
   'time': dict({ key: string(), value: date() }),
   'description': optional(string()),
-  'homepage': optional(string()),
+  'homepage': optional(
+    or([string(), array(string())]) as Parser<string | string[]>,
+  ),
   'keywords': optional(array(string())),
   'repository': optional<ParseResult<typeof npm_repository_parser>>(
     npm_repository_parser,
@@ -921,6 +923,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     }
 
     let homepage = pkg.homepage || null
+    if (Array.isArray(homepage)) {
+      homepage = homepage.find(url => url) || null
+    }
     if (npm_package.homepage != homepage) npm_package.homepage = homepage
 
     let readme = pkg.readme || null
