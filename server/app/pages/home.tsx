@@ -32,6 +32,13 @@ let style = Style(/* css */ `
   margin: 0.5rem 0;
   width: fit-content;
 }
+.hint code {
+  background-color: #fef;
+  outline: 1px solid #aaa;
+  border-radius: 0.25rem;
+  padding: 0.1rem;
+  display: inline-block;
+}
 .hide-hints .hint,
 .hide-hints #hideHintsBtn
 {
@@ -205,7 +212,11 @@ where repo_id is null
   and ${field} like :${bind}
 `
         }
-        search_repo_bindings[bind] = '%' + part + '%'
+        if (part.startsWith('"') && part.endsWith('"')) {
+          search_repo_bindings[bind] = part.slice(1, -1)
+        } else {
+          search_repo_bindings[bind] = '%' + part + '%'
+        }
       }
     }
   }
@@ -232,7 +243,11 @@ where repo_id is null
   and ${field} like :${bind}
 `
         }
-        search_npm_package_bindings[bind] = '%' + part + '%'
+        if (part.startsWith('"') && part.endsWith('"')) {
+          search_npm_package_bindings[bind] = part.slice(1, -1)
+        } else {
+          search_npm_package_bindings[bind] = '%' + part + '%'
+        }
       }
     }
   }
@@ -498,14 +513,16 @@ function Page(attrs: {}, context: DynamicContext) {
         </button>
       </div>
       <p class="hint">
-        Hint: you can search by multiple keywords, separated by space, e.g.
-        "react event" as searching for repos containing "react" and "event" in
-        the name (appearing any order).
+        Hint: you can search by multiple keywords, separated by space, e.g.{' '}
+        <code>react event</code> as searching for repos containing{' '}
+        <code>react</code> and <code>event</code> in the name (appearing any
+        order).
       </p>
       <p class="hint">
-        Hint: you can indicate negative keywords with hyphen prefix, e.g.
-        "-react -ng- chart" as searching for "chart" libraries while excluding
-        those framework-specific libraries having "react" or "ng-" in the name.
+        Hint: you can indicate negative keywords with hyphen prefix, e.g.{' '}
+        <code>-react -ng- chart</code> as searching for <code>chart</code>{' '}
+        libraries while excluding those framework-specific libraries having{' '}
+        <code>react</code> or <code>ng-</code> in the name.
       </p>
       <p class="hint">
         Hint: multiple keywords are combined with "and" for most fields, but
@@ -513,8 +530,15 @@ function Page(attrs: {}, context: DynamicContext) {
       </p>
       <p class="hint">
         Hint: the keyboards are matched partially for most fields, but is
-        matched exactly for programming languages. So searching "Java" will not
-        match "Javascript" repos.
+        matched exactly for programming languages. So searching{' '}
+        <code>Java</code> will not match <code>Javascript</code> repos.
+      </p>
+      <p class="hint">
+        Hint: if a keyword is wrapped with double quotes, it is matched in full.
+        For example searching <code>speed</code> will matched for{' '}
+        <code>frank-dspeed</code> but searching <code>"speed"</code> will not
+        match for that user. This feature does not apply to the language field
+        as it's always matched in full.
       </p>
       {result}
     </form>
