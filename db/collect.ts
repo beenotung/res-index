@@ -849,6 +849,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       // e.g. "Glimpse/Home"
       if (pkg.bugs) {
         repository = null
+      } else if (/^.+:.+\/.+$/.test(repository)) {
+        // e.g. "bitbucket.org:mysearchbot/traverz-core-ui.git"
       } else {
         console.error('short form of github repo?', pkg.repository)
         throw new Error('invalid repository')
