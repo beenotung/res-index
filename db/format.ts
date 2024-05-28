@@ -66,8 +66,9 @@ export function cleanRepoUrl(url: string): string | null {
   }
 
   // e.g. "github:Azure/azure-sdk-for-js"
-  if (url.startsWith('github:')) {
-    url = url.replace('github:', 'https://github.com/')
+  // e.g. "bitbucket.org:mysearchbot/traverz-core-ui.git"
+  if (url.split(':').length == 2 && url.split('/').length == 2) {
+    url = 'https://' + url.replace(':', '/').replace(/\.git$/, '')
   }
 
   let parts = url.split('/')
