@@ -850,7 +850,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       repository = null
     }
     if (repository == 'URL_OF_YOUR_REPOSITORY') {
-      // e.g. "terra-component-lib"
+      // e.g. npm package: "terra-component-lib"
       repository = null
     }
     if (repository == 'git+') {
