@@ -11,6 +11,7 @@ import { Link } from '../components/router.js'
 import { nodeToVNode } from '../jsx/vnode.js'
 import { Element } from '../jsx/types.js'
 import { newDB } from 'better-sqlite3-schema'
+import { DAY } from '@beenotung/tslib/time.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -31,6 +32,17 @@ let style = Style(/* css */ `
   margin: 0.5rem 0;
   width: fit-content;
 }
+.hide-hints .hint,
+.hide-hints #hideHintsBtn
+{
+  display: none;
+}
+#showHintsBtn {
+  display: none;
+}
+.hide-hints #showHintsBtn {
+  display: block;
+}
 .list {
   padding: 0.25rem;
 }
@@ -45,7 +57,32 @@ let style = Style(/* css */ `
 `)
 
 let script = Script(/* javascript */ `
-searchForm.keyword.focus()
+function autoFocusKeyword() {
+  if (searchForm?.keyword) {
+    searchForm.keyword.focus()
+    return
+  }
+  setTimeout(autoFocusKeyword, 33)
+}
+autoFocusKeyword()
+
+function hideHints() {
+  let hide_hint_until = Date.now() + 1 * ${DAY}
+  localStorage.setItem('hide_hint_until', hide_hint_until)
+  searchForm.classList.add('hide-hints')
+}
+function showHints() {
+  localStorage.removeItem('hide_hint_until')
+  searchForm.classList.remove('hide-hints')
+}
+function autoHideHints() {
+  console.log('autoHideHints')
+  let hide_hint_until = +localStorage.getItem('hide_hint_until')
+  if (Date.now() < hide_hint_until) {
+    searchForm.classList.add('hide-hints')
+  }
+}
+autoHideHints()
 `)
 
 let content = (
@@ -447,6 +484,19 @@ function Page(attrs: {}, context: DynamicContext) {
         <input name="desc" placeholder={'e.g. 倉頡'} value={query.desc} />
       </label>
       <input type="submit" value="Search" />
+      <div style="margin-top: 0.5rem">
+        <button
+          type="button"
+          id="hideHintsBtn"
+          onclick="hideHints()"
+          title="Hide hints for 24 hours"
+        >
+          Hide Hints
+        </button>
+        <button type="button" id="showHintsBtn" onclick="showHints()">
+          Show Hints
+        </button>
+      </div>
       <p class="hint">
         Hint: you can search by multiple keywords, separated by space, e.g.
         "react event" as searching for repos containing "react" and "event" in
