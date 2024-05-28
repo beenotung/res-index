@@ -849,23 +849,16 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       // e.g. "@buidly/sdk-dapp-with-lythra"
       repository = null
     }
-    if (!repository?.startsWith('git@') && repository?.split('/').length == 2) {
-      // e.g. "Glimpse/Home"
-      if (pkg.bugs) {
-        repository = null
-      } else if (/^.+:.+\/.+$/.test(repository)) {
-        // e.g. "bitbucket.org:mysearchbot/traverz-core-ui.git"
-      } else {
-        console.error('short form of github repo?', pkg.repository)
-        throw new Error('invalid repository')
-      }
-    }
     if (repository == 'URL_OF_YOUR_REPOSITORY') {
       // e.g. "terra-component-lib"
       repository = null
     }
     if (repository == 'git+') {
       // e.g. npm package: "post-or-save-package"
+      repository = null
+    }
+    if (repository?.match(/^[\w-]+\/[\w-]+$/) && pkg.bugs) {
+      // e.g. "Glimpse/Home"
       repository = null
     }
     if (!repository && pkg.bugs) {

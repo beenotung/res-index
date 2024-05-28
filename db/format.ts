@@ -11,6 +11,11 @@ export function cleanRepoUrl(url: string): string | null {
       return null
   }
 
+  // e.g. "lukeed/sirv"
+  if (url.match(/^[\w-]+\/[\w-]+$/)) {
+    url = 'https://github.com/' + url
+  }
+
   // e.g. npm package: "post-or-save-package"
   if (url == 'git+') {
     return null
