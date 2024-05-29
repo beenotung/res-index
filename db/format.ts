@@ -118,6 +118,13 @@ export function cleanRepoUrl(url: string): string | null {
     return null
   }
 
+  // e.g. "github.com-godspeed:godspeedsystems/gs-node-service"
+  match = url.match(/^(github\.[\w-.]+):[\w-.]+\/[\w-.]+$/)
+  if (match && match[1] !== 'github.com') {
+    // skip private repository
+    return null
+  }
+
   if (!url.startsWith('https://')) {
     // e.g. git over ssh?
     throw new Error('Invalid repository url: ' + url)
