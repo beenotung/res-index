@@ -484,6 +484,7 @@ function brideToFn<Fn extends (input: any) => any>(
 type Sync<T> = {
   list_url: string
   batch_url: string
+  select_list: { all: () => string[] }
   on_receive_list: (input: { receive_list: string[] }) => {
     need_list: string[]
   }
@@ -493,6 +494,7 @@ type Sync<T> = {
 let sync_repo: Sync<RepoExport> = {
   list_url: toRouteUrl(routes, '/dataset/repo/list'),
   batch_url: toRouteUrl(routes, '/dataset/repo/batch'),
+  select_list: select_repo_list,
   on_receive_list: on_receive_repo_list,
   export_one: export_repo,
   on_receive_batch: on_receive_repo_batch,
@@ -500,6 +502,7 @@ let sync_repo: Sync<RepoExport> = {
 let sync_npm_package: Sync<NpmPackageExport> = {
   list_url: toRouteUrl(routes, '/dataset/npm_package/list'),
   batch_url: toRouteUrl(routes, '/dataset/npm_package/batch'),
+  select_list: select_npm_package_list,
   on_receive_list: on_receive_npm_package_list,
   export_one: export_npm_package,
   on_receive_batch: on_receive_npm_package_batch,
@@ -509,7 +512,7 @@ async function run_sync<T>(sync: Sync<T>) {
   let batch_size = 200
   let json = await post<typeof sync.on_receive_list>(
     toRouteUrl(routes, sync.list_url),
-    { receive_list: select_repo_list.all() },
+    { receive_list: sync.select_list.all() },
   )
   let batches = binArray(json.need_list, batch_size)
   for (let key_batch of batches) {
