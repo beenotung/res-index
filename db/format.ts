@@ -52,7 +52,14 @@ export function cleanRepoUrl(url: string): string | null {
 
   // skip IP-based repositories
   // e.g. "http://10.70.71.36/vue/ei"
-  if (isIP(url)) {
+  // e.g. "git@39.105.32.169:/mnt/git/elmer-redux"
+  if (
+    isIP(
+      url.startsWith('git@')
+        ? 'http://' + url.replace('git@', '').split(':')[0]
+        : url,
+    )
+  ) {
     return null
   }
 
