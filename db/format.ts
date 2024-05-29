@@ -109,22 +109,18 @@ export function cleanRepoUrl(url: string): string | null {
     return null
   }
 
-  // e.g. "git@gitlab.beisencorp.com:ux-cnpm/calendar.git"
-  if (url.endsWith('.git')) {
-    url = url.replace(/\.git$/, '')
-  }
-
-  // e.g. "git@github.com:maleck13/readline"
-  if (url.startsWith('git@')) {
-    url = url.replace('git@', '')
-  }
-
   // e.g. "Luiz Didier/firebox-components"
   if (url.includes(' ')) {
     return null
   }
 
   url = url
+    // e.g. "git@gitlab.beisencorp.com:ux-cnpm/calendar.git"
+    .replace(/\.git$/, '')
+    // e.g. "git@github.com:maleck13/readline"
+    .replace(/^git@/, '')
+    // e.g. "git:@github.com/acosom/node-rdkafka-acosom"
+    .replace(/^git:@/, '')
     // e.g. "github:Azure/azure-sdk-for-js"
     .replace(/^github:/, 'https://github.com/')
     // e.g. "github.com:indreshvishwakarma/sync-provider"
