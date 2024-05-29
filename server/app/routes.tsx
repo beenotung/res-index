@@ -52,9 +52,9 @@ export type StaticPageRoute = {
 } & RenderOptions
 
 export type DynamicPageRoute = {
-  resolve: (context: DynamicContext) => ResolvedPageRoue
+  resolve: (context: DynamicContext) => ResolvedPageRoute
 }
-export type ResolvedPageRoue = StaticPageRoute | Promise<StaticPageRoute>
+export type ResolvedPageRoute = StaticPageRoute | Promise<StaticPageRoute>
 
 export type PageRouteMatch = PageRouteOptions & StaticPageRoute
 
