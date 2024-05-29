@@ -14,7 +14,6 @@ import { db } from '../../../db/db.js'
 import { find, unProxy } from 'better-sqlite3-proxy'
 import { EarlyTerminate, toRouteUrl } from '../helpers.js'
 import { binArray } from '@beenotung/tslib/array.js'
-import { Router } from 'express'
 
 let pageTitle = 'Dataset'
 let addPageTitle = 'Add Dataset'
