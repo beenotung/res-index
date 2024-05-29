@@ -72,17 +72,17 @@ let routeDict: Routes = {
     menuText: 'Home',
     node: Home,
   },
-  ...DemoToast.routes,
+  // ...DemoToast.routes,
   '/user-agents': {
     title: title('User Agents of Visitors'),
     description: "User agents of this site's visitors",
     menuText: 'User Agents',
     node: UserAgents,
   },
-  ...Login.routes,
-  ...Register.routes,
-  ...Profile.routes,
-  ...VerificationCode.routes,
+  // ...Login.routes,
+  // ...Register.routes,
+  // ...Profile.routes,
+  // ...VerificationCode.routes,
 }
 
 export let redirectDict: Record<string, string> = {
