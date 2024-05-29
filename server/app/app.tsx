@@ -16,7 +16,7 @@ import { EarlyTerminate, MessageException } from './helpers.js'
 import { getWSSession } from './session.js'
 import { Flush } from './components/flush.js'
 import { LayoutType, config } from '../config.js'
-import Stats from './stats.js'
+import Stats from './components/stats.js'
 import { MuteConsole, Script } from './components/script.js'
 import {
   matchRoute,
