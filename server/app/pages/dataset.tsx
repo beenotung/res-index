@@ -206,7 +206,7 @@ function export_npm_package(name: string) {
     unpacked_size: pkg.unpacked_size,
     file_count: pkg.file_count,
     repository: pkg.repository,
-    repo: pkg.repo_id ? export_repo(proxy.repo[pkg.repo_id].name) : null,
+    repo: pkg.repo_id ? export_repo(proxy.repo[pkg.repo_id].url) : null,
     homepage: pkg.homepage,
     readme: pkg.readme,
     deprecated: pkg.deprecated,
