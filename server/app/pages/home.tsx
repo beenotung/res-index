@@ -432,7 +432,7 @@ function Page(attrs: {}, context: DynamicContext) {
     {},
     [
       prefix ? <p>repo/package prefix: {prefix}*</p> : null,
-      <p>{match_count} matches</p>,
+      <p>{match_count.toLocaleString()} matches</p>,
       <div class="list">
         {mapArray(matches, match => {
           if (match.type == 'item') {
