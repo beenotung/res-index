@@ -352,9 +352,6 @@ function Page(attrs: {}, context: DynamicContext) {
       username = name.split('/')[0].substring(1)
       npm_package.username = username
     }
-    if (name.startsWith('@' + username)) {
-      name = name.substring(username.length + 2)
-    }
     matchedItems.push({
       name,
       desc: npm_package.desc,
