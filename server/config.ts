@@ -16,6 +16,7 @@ let env = {
   EMAIL_USER: '',
   EMAIL_PASSWORD: '',
   ORIGIN: '',
+  SYNC_API_KEY: '',
 }
 applyDefaultEnv()
 
@@ -56,7 +57,8 @@ export let config = {
   cookie_secret: env.COOKIE_SECRET,
   site_name: 'Resources Index',
   short_site_name: 'res-index',
-  site_description: 'Demo website of ts-liveview',
+  site_description:
+    'A searchable index for development resources, including github repo and npm packages.',
   setup_robots_txt: false,
   epoch,
   auto_open: !production && development && epoch === 1,
@@ -71,6 +73,9 @@ export let config = {
       user: env.EMAIL_USER,
       pass: env.EMAIL_PASSWORD,
     },
+  },
+  api_key: {
+    sync: env.SYNC_API_KEY,
   },
 }
 

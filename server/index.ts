@@ -14,6 +14,7 @@ import { print } from 'listening-on'
 import { HttpError } from './http-error.js'
 import { logRequest } from './app/log.js'
 import { clearInvalidUserId } from './app/auth/user.js'
+import { EarlyTerminate } from './app/helpers.js'
 
 const log = debugLog('index.ts')
 log.enabled = true
@@ -49,12 +50,15 @@ app.use('/js', express.static('build'))
 app.use('/uploads', express.static(config.upload_dir))
 app.use(express.static('public'))
 
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
 attachRoutes(app)
 
 app.use((error: HttpError, req: Request, res: Response, next: NextFunction) => {
+  if ((error as any) == EarlyTerminate) {
+    return
+  }
   res.status(error.statusCode || 500)
   if (error instanceof Error && !(error instanceof HttpError)) {
     console.error(error)

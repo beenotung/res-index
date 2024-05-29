@@ -1,6 +1,6 @@
 import { o } from '../jsx/jsx.js'
 import { ResolvedPageRoute, Routes } from '../routes.js'
-import { apiEndpointTitle, title } from '../../config.js'
+import { apiEndpointTitle, config, title } from '../../config.js'
 import Style from '../components/style.js'
 import { Context, DynamicContext, ExpressContext } from '../context.js'
 import { NpmPackage, Page, Repo, proxy } from '../../../db/proxy.js'
@@ -183,7 +183,10 @@ where npm_package_dependency.package_id = :package_id
 
 type NpmPackageExport = ReturnType<typeof export_npm_package>
 function export_npm_package(name: string) {
-  let pkg = select_npm_package_by_name.get({ name })!
+  let pkg = select_npm_package_by_name.get({ name })
+  if (!pkg) {
+    throw new Error('package not found: ' + name)
+  }
   return {
     id: pkg.id,
     author: pkg.author_id ? proxy.author[pkg.author_id].username : null,
@@ -241,20 +244,22 @@ function on_receive_npm_package_list(input: { receive_list: string[] }) {
 function on_receive_repo_batch(input: {
   receive_list: Array<ReturnType<typeof export_repo>>
 }) {
-  db.transaction(() => {
+  return db.transaction(() => {
     for (let repo of input.receive_list) {
       // TODO
     }
+    return {}
   })()
 }
 
 function on_receive_npm_package_batch(input: {
   receive_list: Array<ReturnType<typeof export_npm_package>>
 }) {
-  db.transaction(() => {
+  return db.transaction(() => {
     for (let npm_package of input.receive_list) {
       // TODO
     }
+    return {}
   })()
 }
 
@@ -263,12 +268,20 @@ async function post<Fn extends (input: any) => any>(
   body: Parameters<Fn>[0],
 ): Promise<ReturnType<Fn>> {
   let remote_origin = 'https://res-index.hkit.cc'
+  console.log('POST', url)
   let res = await fetch(remote_origin + url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Sync-API-Key': config.api_key.sync,
+    },
     body: JSON.stringify(body),
   })
   let json = await res.json()
+  console.log('GOT', json)
+  if (json.error) {
+    throw new Error(json.error)
+  }
   return json
 }
 
@@ -282,21 +295,25 @@ let routes: Routes = {
   '/dataset/repo/list': {
     title: apiEndpointTitle,
     description: 'TODO',
+    streaming: false,
     resolve: context => brideToFn(context, sync_repo.on_receive_list),
   },
   '/dataset/repo/batch': {
     title: apiEndpointTitle,
     description: 'TODO',
+    streaming: false,
     resolve: context => brideToFn(context, sync_repo.on_receive_batch),
   },
   '/dataset/npm_package/list': {
     title: apiEndpointTitle,
     description: 'TODO',
+    streaming: false,
     resolve: context => brideToFn(context, sync_npm_package.on_receive_list),
   },
   '/dataset/npm_package/batch': {
     title: apiEndpointTitle,
     description: 'TODO',
+    streaming: false,
     resolve: context => brideToFn(context, sync_npm_package.on_receive_batch),
   },
 }
@@ -307,6 +324,9 @@ function brideToFn<Fn extends (input: any) => any>(
 ): ResolvedPageRoute {
   if (context.type != 'express') {
     throw new Error('unsupported context type: ' + context.type)
+  }
+  if (context.req.headers['x-sync-api-key'] != config.api_key.sync) {
+    throw new Error('invalid SYNC_API_KEY')
   }
   let json = fn(context.req.body)
   context.res.json(json)
@@ -320,7 +340,7 @@ type Sync<T> = {
     need_list: string[]
   }
   export_one: (key: string) => T
-  on_receive_batch: (input: { receive_list: T[] }) => void
+  on_receive_batch: (input: { receive_list: T[] }) => object
 }
 let sync_repo: Sync<RepoExport> = {
   list_url: toRouteUrl(routes, '/dataset/repo/list'),
@@ -344,8 +364,8 @@ async function run_sync<T>(sync: Sync<T>) {
     { receive_list: select_repo_list.all() },
   )
   let batches = binArray(json.need_list, batch_size)
-  for (let url_batch of batches) {
-    let export_batch = url_batch.map(sync.export_one)
+  for (let key_batch of batches) {
+    let export_batch = key_batch.map(sync.export_one)
     await post<typeof sync.on_receive_batch>(
       toRouteUrl(routes, sync.batch_url),
       { receive_list: export_batch },
