@@ -89,14 +89,6 @@ export function cleanRepoUrl(url: string): string | null {
   // e.g. "github:Azure/azure-sdk-for-js"
   url = url.replace(/^github:/, 'github.com')
 
-  let parts = url.split('/')
-
-  // e.g. "github.com/bwqdxxg/Bwqdxxg-TsLint"
-  if (parts.length == 3 && general_sites.includes(parts[0])) {
-    url = 'https://' + url
-    parts = url.split('/')
-  }
-
   // e.g. "git//git.epam.com/Yaroslav_Kharchenko/jsmp"
   if (url.includes('/git.epam.com/')) {
     // skip private repository
@@ -106,6 +98,14 @@ export function cleanRepoUrl(url: string): string | null {
   if (!url.startsWith('https://')) {
     // e.g. git over ssh?
     throw new Error('Invalid repository url: ' + url)
+  }
+
+  let parts = url.split('/')
+
+  // e.g. "github.com/bwqdxxg/Bwqdxxg-TsLint"
+  if (parts.length == 3 && general_sites.includes(parts[0])) {
+    url = 'https://' + url
+    parts = url.split('/')
   }
 
   // e.g. "https://developers.reddit.com/"
