@@ -13,6 +13,11 @@ export function cleanRepoUrl(url: string): string | null {
       return null
   }
 
+  // e.g. "https://www.npmjs.com/package/fkww"
+  if (url.startsWith('https://www.npmjs.com/')) {
+    return null
+  }
+
   // e.g. "+https://github.com/swc-project/plugins"
   if (url.startsWith('+http')) {
     url = url.substring(1)
@@ -60,6 +65,28 @@ export function cleanRepoUrl(url: string): string | null {
     .replace(/^ssh:\/\/git@/, 'https://')
     // e.g. "http://github.com/jprichardson/terst"
     .replace(/^http:\/\/github.com\//, 'https://github.com/')
+    // e.g. "https://git@bitbucket.org/knetikmedia/splyt-sdk-js"
+    .replace(/:\/\/git@/, '://')
+
+  if (url.includes('@') && url.startsWith('https://')) {
+    let parts = url.split('/')
+    if (parts.length == 6 && parts[4].startsWith('@')) {
+      // remove username before org name
+      // e.g. "https://github.com/gozala/@multiformats/base-x"
+      parts[4] = parts[4].substring(1)
+      parts.splice(3, 1)
+    } else if (
+      parts.length == 5 &&
+      parts[2].includes('@') &&
+      !parts[2].startsWith('@') &&
+      !parts[2].endsWith('@')
+    ) {
+      // remove username before hostname
+      // e.g. "https://estepin@bitbucket.org/estepin/g-mfo-anket-sdk"
+      parts[2] = parts[2].split('@').pop()!
+    }
+    url = parts.join('/')
+  }
 
   // skip IP-based repositories
   // e.g. "http://10.70.71.36/vue/ei"
@@ -123,6 +150,15 @@ export function cleanRepoUrl(url: string): string | null {
   if (match && match[1] !== 'github.com') {
     // skip private repository
     return null
+  }
+
+  // e.g. "statechannels/monorepo/blob/master/packages/client-api-schema"
+  if (
+    url.match(/^[\w\/-]+$/) &&
+    !url.includes('github') &&
+    !url.includes('gitlab')
+  ) {
+    url = 'https://github.com/' + url
   }
 
   if (!url.startsWith('https://')) {

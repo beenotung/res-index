@@ -1,4 +1,4 @@
-import { filter, find, seedRow, getId } from 'better-sqlite3-proxy'
+import { filter, find, seedRow, getId, update } from 'better-sqlite3-proxy'
 import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
@@ -240,13 +240,57 @@ function remove_invalid_repo_url() {
     `)
   for (let row of rows) {
     let url = cleanRepoUrl(row.repo_url)
-    if (url) continue
-    proxy.npm_package[row.npm_package_id].repo_id = null
-    delete proxy.repo[row.repo_id]
-    delete proxy.page[row.page_id]
+    if (!url || url != row.repo_url) {
+      deleteRepo(row.repo_id)
+    }
   }
 }
 db.transaction(remove_invalid_repo_url).immediate()
+
+function deleteRepo(repo_id: number) {
+  if (!(repo_id in proxy.repo)) {
+    return
+  }
+  db.prepare(
+    /* sql */ `
+update npm_package
+set repo_id = null
+where repo_id = :repo_id
+`,
+  ).run({ repo_id })
+  let page_id = proxy.repo[repo_id].page_id
+  delete proxy.repo[repo_id]
+  if (!find(proxy.npm_package, { page_id })) {
+    delete proxy.page[page_id]
+  }
+}
+
+function fix_repo_url() {
+  let rows = db.query<{
+    repo_id: number
+    repo_url: string
+    repository: string | null
+    npm_package_id: number | null
+    page_id: number
+  }>(/* sql */ `
+select repo.id as repo_id
+, repo.url as repo_url
+, npm_package.repository
+, npm_package.id as npm_package_id
+, npm_package.name
+, repo.page_id
+from repo
+left join npm_package on npm_package.repo_id = repo.id
+where url like '%@%'
+`)
+  for (let row of rows) {
+    let url = cleanRepoUrl(row.repository || row.repo_url)
+    if (url == row.repo_url) continue
+    // remove invalid repo
+    deleteRepo(row.repo_id)
+  }
+}
+db.transaction(fix_repo_url).immediate()
 
 function fix_npm_repository() {
   let rows = db.query<{ id: number; repository: string }>(/* sql */ `
@@ -282,7 +326,7 @@ function fix_npm_repository() {
         forks: null,
         readme: null,
         last_commit: null,
-        is_public: !!cleanRepoUrl(repo_url),
+        is_public: null,
         page_id: getId(proxy.page, 'url', repo_url),
       })
       repo = proxy.repo[repo_id]
@@ -306,11 +350,20 @@ where domain_id is null
 set_repo_domain()
 
 function check_repo_is_public() {
-  let repos = filter(proxy.repo, { is_public: null })
-  for (let repo of repos) {
-    let url = cleanRepoUrl(repo.url)
-    repo.is_public = !!url
-  }
+  // let repos = filter(proxy.repo, { is_public: null })
+  // for (let repo of repos) {
+  //   let url = cleanRepoUrl(repo.url)
+  //   repo.is_public = !!url
+  // }
+  db.run(/* sql */ `
+update repo
+set is_public = null
+where is_public = 1
+  and page_id in (
+    select id from page
+    where check_time is null
+  )
+`)
 }
 check_repo_is_public()
 
