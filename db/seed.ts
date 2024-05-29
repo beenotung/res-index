@@ -8,6 +8,7 @@ import { homedir } from 'os'
 import { execSync } from 'child_process'
 import { npm_package_detail_parser } from './collect'
 import { getLanguageId } from './store'
+import { env } from './env'
 
 // This file serve like the knex seed file.
 //
@@ -95,7 +96,9 @@ function seed_local_repo() {
     }
   }
 }
-seed_local_repo()
+if (env.NODE_ENV == 'development') {
+  seed_local_repo()
+}
 
 function fix_language_name() {
   let update_programming_language_id = db.prepare<{
