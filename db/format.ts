@@ -96,8 +96,11 @@ export function cleanRepoUrl(url: string): string | null {
     return null
   }
 
-  // e.g. "github:Azure/azure-sdk-for-js"
-  url = url.replace(/^github:/, 'github.com')
+  url = url
+    // e.g. "github:Azure/azure-sdk-for-js"
+    .replace(/^github:/, 'https://github.com/')
+    // e.g. "gitlab.com:TemplateMonster/PlasmaPlatform/Frontend/tm-service-dummy"
+    .replace(/^gitlab.com:/, 'https://gitlab.com/')
 
   // e.g. "git//git.epam.com/Yaroslav_Kharchenko/jsmp"
   if (url.includes('/git.epam.com/')) {
