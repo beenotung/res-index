@@ -128,6 +128,11 @@ export function cleanRepoUrl(url: string): string | null {
     // e.g. "gitlab.com:TemplateMonster/PlasmaPlatform/Frontend/tm-service-dummy"
     .replace(/^gitlab.com:/, 'https://gitlab.com/')
 
+  // e.g. "github.com/acosom/node-rdkafka-acosom"
+  if (url.startsWith('github.com/') && url.split('/').length == 3) {
+    url = url.replace(/github.com/, 'https://github.com/')
+  }
+
   // e.g. "git//git.epam.com/Yaroslav_Kharchenko/jsmp"
   if (url.includes('/git.epam.com/')) {
     // skip private repository
