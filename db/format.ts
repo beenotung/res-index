@@ -4,6 +4,7 @@ let general_sites = ['github.com', 'gitlab.com', 'bitbucket.org']
 
 export function cleanRepoUrl(url: string): string | null {
   switch (url) {
+    case '-':
     case 'none':
     case 'TBC':
     case 'FIXME':
