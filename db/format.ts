@@ -100,6 +100,8 @@ export function cleanRepoUrl(url: string): string | null {
   url = url
     // e.g. "github:Azure/azure-sdk-for-js"
     .replace(/^github:/, 'https://github.com/')
+    // e.g. "github.com:indreshvishwakarma/sync-provider"
+    .replace(/^github.com:/, 'https://github.com/')
     // e.g. "gitlab.com:TemplateMonster/PlasmaPlatform/Frontend/tm-service-dummy"
     .replace(/^gitlab.com:/, 'https://gitlab.com/')
 
