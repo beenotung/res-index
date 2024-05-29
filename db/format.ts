@@ -93,6 +93,12 @@ export function cleanRepoUrl(url: string): string | null {
     return null
   }
 
+  // e.g. "git//git.epam.com/Yaroslav_Kharchenko/jsmp"
+  if (url.includes('/git.epam.com/')) {
+    // skip private repository
+    return null
+  }
+
   if (!url.startsWith('https://')) {
     // e.g. git over ssh?
     throw new Error('Invalid repository url: ' + url)
