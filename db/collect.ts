@@ -16,6 +16,7 @@ import {
   date,
   dateString,
   dict,
+  email,
   int,
   literal,
   nullable,
@@ -23,6 +24,7 @@ import {
   optional,
   or,
   string,
+  url,
 } from 'cast.ts'
 import { cleanRepoUrl, parseRepoUrl } from './format'
 import { getLanguageId } from './store'
@@ -680,11 +682,14 @@ let published_npm_package_detail_parser = object({
       object({
         url: string({ sampleValue: 'https://github.com/azawakh/twsh/issue' }),
       }),
+      object({
+        email: email(),
+      }),
       string({
         sampleValue:
           'https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen',
       }),
-    ]),
+    ]) as Parser<{ url: string } | { email: string } | string>,
   ),
   'readme': optional(string()),
 })
@@ -864,7 +869,12 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       repository = null
     }
     if (!repository && pkg.bugs) {
-      let url = typeof pkg.bugs == 'string' ? pkg.bugs : pkg.bugs.url
+      let url =
+        typeof pkg.bugs == 'string'
+          ? pkg.bugs
+          : 'url' in pkg.bugs
+            ? pkg.bugs.url
+            : ''
       // e.g. "https://github.com/azawakh/twsh/issue"
       // e.g. "https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen"
       let parts = url.split('/')
