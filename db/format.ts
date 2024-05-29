@@ -108,6 +108,13 @@ export function cleanRepoUrl(url: string): string | null {
     return null
   }
 
+  // e.g. "gitlab.teamhologram.ninja:Hologram/holokit"
+  let match = url.match(/^(gitlab\.[\w-.]+):[\w-.]+\/[\w-.]+$/)
+  if (match && match[1] !== 'gitlab.com') {
+    // skip private repository
+    return null
+  }
+
   if (!url.startsWith('https://')) {
     // e.g. git over ssh?
     throw new Error('Invalid repository url: ' + url)
