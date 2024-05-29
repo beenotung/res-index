@@ -12,6 +12,16 @@ export function cleanRepoUrl(url: string): string | null {
       return null
   }
 
+  // e.g. "+https://github.com/swc-project/plugins"
+  if (url.startsWith('+http')) {
+    url = url.substring(1)
+  }
+
+  // e.g. "hhttps://github.com/RodrigoMattosoSilveira/rms-sparklines"
+  if (url.startsWith('hhttps://')) {
+    url = url.substring(1)
+  }
+
   // e.g. "lukeed/sirv"
   if (url.match(/^[\w-.]+\/[\w-.]+$/)) {
     url = 'https://github.com/' + url
