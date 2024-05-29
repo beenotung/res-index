@@ -94,6 +94,8 @@ function Main(attrs: {}, context: Context) {
       <div>Resources to be indexed:</div>
       <ul>
         <li>pypi package</li>
+        <li>composer package</li>
+        <li>nuget package</li>
         <li>crates package</li>
       </ul>
     </>
