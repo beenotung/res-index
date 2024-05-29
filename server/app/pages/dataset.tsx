@@ -3,9 +3,15 @@ import { ResolvedPageRoute, Routes } from '../routes.js'
 import { apiEndpointTitle, config, title } from '../../config.js'
 import Style from '../components/style.js'
 import { Context, DynamicContext, ExpressContext } from '../context.js'
-import { NpmPackage, Page, Repo, proxy } from '../../../db/proxy.js'
+import {
+  NpmPackage,
+  NpmPackageDependency,
+  Page,
+  Repo,
+  proxy,
+} from '../../../db/proxy.js'
 import { db } from '../../../db/db.js'
-import { unProxy } from 'better-sqlite3-proxy'
+import { find, unProxy } from 'better-sqlite3-proxy'
 import { EarlyTerminate, toRouteUrl } from '../helpers.js'
 import { binArray } from '@beenotung/tslib/array.js'
 import { Router } from 'express'
@@ -170,16 +176,17 @@ select id, url, check_time, update_time
 from page where id = :id
 `)
 
-let select_npm_deps = db
-  .prepare<{ package_id: number }, string>(
-    /* sql */ `
-select npm_package.name
+let select_npm_deps = db.prepare<
+  { package_id: number },
+  Pick<NpmPackageDependency, 'type'> & { name: string }
+>(/* sql */ `
+select
+  npm_package.name
+, npm_package.type
 from npm_package_dependency
 inner join npm_package on npm_package.id = npm_package_dependency.dependency_id
 where npm_package_dependency.package_id = :package_id
-`,
-  )
-  .pluck()
+`)
 
 type NpmPackageExport = ReturnType<typeof export_npm_package>
 function export_npm_package(name: string) {
@@ -241,12 +248,154 @@ function on_receive_npm_package_list(input: { receive_list: string[] }) {
   return { need_list }
 }
 
+function upsert<Table extends { id?: number | null }>(
+  table: Table[],
+  key: keyof Table,
+  data: Table,
+): number {
+  let filter = { [key]: data[key] } as Partial<Table>
+  let row = find(table, filter)
+  if (row) return row.id!
+  return table.push(data)
+}
+
+function get_id<Table extends { id?: number | null }, Key extends keyof Table>(
+  table: Table[],
+  key: Key,
+  value: null,
+): null
+function get_id<Table extends { id?: number | null }, Key extends keyof Table>(
+  table: Table[],
+  key: Key,
+  value: Table[Key] | null,
+): number
+function get_id<Table extends { id?: number | null }, Key extends keyof Table>(
+  table: Table[],
+  key: Key,
+  value: Table[Key] | null,
+): number | null {
+  if (value == null) return null
+  let filter = { [key]: value } as any
+  return upsert(table, key, filter)
+}
+
+function upsert_page(
+  page: NonNullable<ReturnType<(typeof select_page)['get']>>,
+) {
+  return upsert(proxy.page, 'url', {
+    url: page.url,
+    payload: null,
+    check_time: page.check_time,
+    update_time: page.update_time,
+  })
+}
+
+function upsert_repo(repo: ReturnType<typeof export_repo>) {
+  let repo_id = upsert(proxy.repo, 'url', {
+    domain_id: get_id(proxy.domain, 'host', repo.domain),
+    author_id: get_id(proxy.author, 'username', repo.author),
+    name: repo.name,
+    is_fork: repo.is_fork,
+    url: repo.url,
+    desc: repo.desc,
+    programming_language_id: get_id(
+      proxy.programming_language,
+      'name',
+      repo.programming_language,
+    ),
+    website: repo.website,
+    stars: repo.stars,
+    watchers: repo.watchers,
+    forks: repo.forks,
+    readme: repo.readme,
+    last_commit: repo.last_commit,
+    is_public: repo.is_public,
+    page_id: upsert_page(repo.page),
+  })
+  for (let keyword of repo.keywords) {
+    let row = {
+      repo_id,
+      keyword_id: get_id(proxy.keyword, 'name', keyword),
+    }
+    find(proxy.repo_keyword, row) || proxy.repo_keyword.push(row)
+  }
+  return repo_id
+}
+
+function upsert_npm_package(
+  npm_package: ReturnType<typeof export_npm_package>,
+) {
+  let package_id = upsert(proxy.npm_package, 'name', {
+    author_id: get_id(proxy.author, 'username', npm_package.author),
+    name: npm_package.name,
+    version: npm_package.version,
+    desc: npm_package.desc,
+    create_time: npm_package.create_time,
+    last_publish_time: npm_package.last_publish_time,
+    unpublish_time: npm_package.unpublish_time,
+    weekly_downloads: npm_package.weekly_downloads,
+    unpacked_size: npm_package.unpacked_size,
+    file_count: npm_package.file_count,
+    repository: npm_package.repository,
+    repo_id: npm_package.repo ? upsert_repo(npm_package.repo) : null,
+    homepage: npm_package.homepage,
+    readme: npm_package.readme,
+    deprecated: npm_package.deprecated,
+    has_types: npm_package.has_types,
+    page_id: upsert_page(npm_package.page),
+    download_page_id: upsert_page(npm_package.download_page),
+    dependent_page_id: upsert_page(npm_package.dependent_page),
+  })
+  for (let keyword of npm_package.keywords) {
+    let row = {
+      npm_package_id: package_id,
+      keyword_id: get_id(proxy.keyword, 'name', keyword),
+    }
+    find(proxy.npm_package_keyword, row) || proxy.npm_package_keyword.push(row)
+  }
+  for (let dep of npm_package.dependencies) {
+    let package_page_url = `https://registry.npmjs.org/${dep.name}`
+    let package_page_id = getPageId(package_page_url)
+
+    let download_page_url = `https://api.npmjs.org/downloads/point/last-week/${dep.name}`
+    let download_page_id = getPageId(download_page_url)
+
+    let dependent_page_url = `https://www.npmjs.com/browse/depended/${dep.name}?offset=0`
+    let dependent_page_id = getPageId(dependent_page_url)
+
+    let dep_row = {} as NpmPackage
+    dep_row.name = dep.name
+    dep_row.page_id = package_page_id
+    dep_row.download_page_id = download_page_id
+    dep_row.dependent_page_id = dependent_page_id
+    let dependency_id = upsert(proxy.npm_package, 'name', dep_row)
+    let row = {
+      package_id,
+      dependency_id,
+      type: dep.type,
+    }
+    find(proxy.npm_package_dependency, row) ||
+      proxy.npm_package_dependency.push(row)
+  }
+}
+
+function getPageId(url: string): number {
+  let page = find(proxy.page, { url })
+  if (page) return page.id!
+  return proxy.page.push({
+    url,
+    payload: null,
+    check_time: null,
+    update_time: null,
+  })
+}
+
 function on_receive_repo_batch(input: {
   receive_list: Array<ReturnType<typeof export_repo>>
 }) {
   return db.transaction(() => {
     for (let repo of input.receive_list) {
-      // TODO
+      upsert_repo(repo)
     }
     return {}
   })()
@@ -257,7 +406,7 @@ function on_receive_npm_package_batch(input: {
 }) {
   return db.transaction(() => {
     for (let npm_package of input.receive_list) {
-      // TODO
+      upsert_npm_package(npm_package)
     }
     return {}
   })()
