@@ -2,7 +2,7 @@ import { o } from '../jsx/jsx.js'
 import { ResolvedPageRoute, Routes } from '../routes.js'
 import { apiEndpointTitle, config, title } from '../../config.js'
 import Style from '../components/style.js'
-import { Context, DynamicContext, ExpressContext } from '../context.js'
+import { Context, DynamicContext } from '../context.js'
 import {
   NpmPackage,
   NpmPackageDependency,
@@ -11,7 +11,7 @@ import {
   proxy,
 } from '../../../db/proxy.js'
 import { db } from '../../../db/db.js'
-import { find, unProxy } from 'better-sqlite3-proxy'
+import { find } from 'better-sqlite3-proxy'
 import { EarlyTerminate, toRouteUrl } from '../helpers.js'
 import { binArray } from '@beenotung/tslib/array.js'
 
