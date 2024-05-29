@@ -127,6 +127,8 @@ export function cleanRepoUrl(url: string): string | null {
     .replace(/^github.com:/, 'https://github.com/')
     // e.g. "gitlab.com:TemplateMonster/PlasmaPlatform/Frontend/tm-service-dummy"
     .replace(/^gitlab.com:/, 'https://gitlab.com/')
+    // e.g. "htts://github.com/sandhawke/webgram-logins"
+    .replace(/^htts:\/\//, 'https://')
 
   // e.g. "github.com/acosom/node-rdkafka-acosom"
   if (url.startsWith('github.com/') && url.split('/').length == 3) {
