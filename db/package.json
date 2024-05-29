@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@beenotung/tslib": "^23.5.0",
-    "better-sqlite3-proxy": "^2.6.3",
+    "better-sqlite3-proxy": "^2.7.1",
     "better-sqlite3-schema": "^3.1.4",
     "graceful-playwright": "^1.1.9",
     "knex": "^3.1.0",

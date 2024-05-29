@@ -2,7 +2,7 @@ import { chromium } from 'playwright'
 import { fetch_retry } from '@beenotung/tslib/async/network'
 import { DAY } from '@beenotung/tslib/time'
 import { db } from './db'
-import { del, filter, find } from 'better-sqlite3-proxy'
+import { del, filter, find, getId } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
 import { later } from '@beenotung/tslib/async/wait'
 import { NpmPackage, NpmPackageDependency, proxy, Repo } from './proxy'
@@ -240,19 +240,18 @@ async function checkGithubRepositories(
         /* repo */
         let repo = find(proxy.repo, { url: repoData.url })
         let desc = repoData.desc || null
-        let programming_language_id = !repoData.programming_language
-          ? null
-          : find(proxy.programming_language, {
-              name: repoData.programming_language,
-            })?.id ||
-            proxy.programming_language.push({
-              name: repoData.programming_language,
-            })
+        let programming_language_id = repoData.programming_language
+          ? getId(
+              proxy.programming_language,
+              'name',
+              repoData.programming_language,
+            )
+          : null
         if (!repo) {
           let { name, host } = parseRepoUrl(repoData.url)
           let id = proxy.repo.push({
-            domain_id: getDomainId(host),
-            author_id: getAuthorId(username),
+            domain_id: getId(proxy.domain, 'host', host),
+            author_id: getId(proxy.author, 'username', username),
             name,
             is_fork: repoData.is_fork,
             url: repoData.url,
@@ -282,8 +281,7 @@ async function checkGithubRepositories(
           }
         }
         for (let name of repoData.tags) {
-          let keyword_id =
-            find(proxy.keyword, { name })?.id || proxy.keyword.push({ name })
+          let keyword_id = getId(proxy.keyword, 'name', name)
           find(proxy.repo_keyword, { repo_id, keyword_id }) ||
             proxy.repo_keyword.push({ repo_id, keyword_id })
         }
@@ -449,8 +447,7 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
       }
     }
     for (let name of res.topics) {
-      let keyword_id =
-        find(proxy.keyword, { name })?.id || proxy.keyword.push({ name })
+      let keyword_id = getId(proxy.keyword, 'name', name)
       find(proxy.repo_keyword, { repo_id, keyword_id }) ||
         proxy.repo_keyword.push({ repo_id, keyword_id })
     }
@@ -560,7 +557,7 @@ function storeNpmPackage(pkg: {
   let npm_package = find(proxy.npm_package, { name: pkg.name })
   if (!npm_package) {
     let id = proxy.npm_package.push({
-      author_id: pkg.scope ? getAuthorId(pkg.scope) : null,
+      author_id: pkg.scope ? getId(proxy.author, 'username', pkg.scope) : null,
       name: pkg.name,
       version: null,
       desc: pkg.desc || null,
@@ -583,7 +580,7 @@ function storeNpmPackage(pkg: {
     return id
   } else {
     if (pkg.scope) {
-      let author_id = getAuthorId(pkg.scope)
+      let author_id = getId(proxy.author, 'username', pkg.scope)
       if (npm_package.author_id != author_id) npm_package.author_id = author_id
     }
     if (pkg.desc && npm_package.desc != pkg.desc) npm_package.desc = pkg.desc
@@ -803,7 +800,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       return null
     }
     let author = findAuthor()
-    let author_id = author ? getAuthorId(author) : null
+    let author_id = author ? getId(proxy.author, 'username', author) : null
     if (npm_package.author_id !== author_id) npm_package.author_id = author_id
 
     if (npm_package.version != version_name) npm_package.version = version_name
@@ -897,20 +894,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
       let repo = find(proxy.repo, { url: repo_url })
       if (!repo) {
-        let repo_author_id =
-          find(proxy.author, { username: repo_username })?.id ||
-          proxy.author.push({ username: repo_username })
-        let repo_page_id =
-          find(proxy.page, { url: repo_url })?.id ||
-          proxy.page.push({
-            url: repo_url,
-            payload: null,
-            check_time: null,
-            update_time: null,
-          })
         let repo_id = proxy.repo.push({
-          domain_id: getDomainId(repo_host),
-          author_id: repo_author_id,
+          domain_id: getId(proxy.domain, 'host', repo_host),
+          author_id: getId(proxy.author, 'username', repo_username),
           name: repo_name,
           is_fork: null,
           url: repo_url,
@@ -923,7 +909,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
           readme: null,
           last_commit: null,
           is_public: null,
-          page_id: repo_page_id,
+          page_id: getId(proxy.page, 'url', repo_url),
         })
         repo = proxy.repo[repo_id]
       }
@@ -950,8 +936,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       }
     }
     for (let name of pkg.keywords || []) {
-      let keyword_id =
-        find(proxy.keyword, { name })?.id || proxy.keyword.push({ name })
+      let keyword_id = getId(proxy.keyword, 'name', name)
       find(proxy.npm_package_keyword, { npm_package_id, keyword_id }) ||
         proxy.npm_package_keyword.push({ npm_package_id, keyword_id })
     }
@@ -1083,15 +1068,7 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
 
     /* next index page */
     if (nextHref) {
-      let nextPage = find(proxy.page, { url: nextHref })
-      if (!nextPage) {
-        proxy.page.push({
-          url: nextHref,
-          payload: null,
-          check_time: null,
-          update_time: null,
-        })
-      }
+      getPageId(nextHref)
     }
 
     function storePackages() {
@@ -1162,16 +1139,6 @@ function getPageId(url: string): number {
     check_time: null,
     update_time: null,
   })
-}
-
-function getAuthorId(username: string): number {
-  let author = find(proxy.author, { username })
-  if (author) return author.id!
-  return proxy.author.push({ username })
-}
-
-function getDomainId(host: string): number {
-  return find(proxy.domain, { host })?.id || proxy.domain.push({ host })
 }
 
 function fetch(url: string) {

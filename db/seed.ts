@@ -1,4 +1,4 @@
-import { filter, find, seedRow } from 'better-sqlite3-proxy'
+import { filter, find, seedRow, getId } from 'better-sqlite3-proxy'
 import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
@@ -51,33 +51,16 @@ function seed_local_repo() {
     let host_dir = join(homedir(), 'workspace', host)
     let usernames = readdirSync(host_dir)
     for (let username of usernames) {
-      let author_id =
-        find(proxy.author, { username })?.id || proxy.author.push({ username })
-
       let user_dir = join(host_dir, username)
       let repos = readdirSync(user_dir)
       for (let repo of repos) {
         let repo_dir = join(user_dir, repo)
         if (!statSync(repo_dir).isDirectory()) continue
-
-        let domain_id =
-          find(proxy.domain, { host })?.id || proxy.domain.push({ host })
-
         let url = `https://${host}/${username}/${repo}`
-
-        let page_id =
-          find(proxy.page, { url })?.id ||
-          proxy.page.push({
-            url,
-            payload: null,
-            check_time: null,
-            update_time: null,
-          })
-
         find(proxy.repo, { url }) ||
           proxy.repo.push({
-            domain_id,
-            author_id,
+            domain_id: getId(proxy.domain, 'host', host),
+            author_id: getId(proxy.author, 'username', username),
             name: repo,
             is_fork: false,
             url,
@@ -90,7 +73,7 @@ function seed_local_repo() {
             readme: null,
             last_commit: null,
             is_public: !!cleanRepoUrl(url),
-            page_id,
+            page_id: getId(proxy.page, 'url', url),
           })
       }
     }
@@ -266,7 +249,7 @@ function remove_invalid_repo_url() {
 db.transaction(remove_invalid_repo_url).immediate()
 
 function fix_npm_repository() {
-  let rows = db.query(/* sql */ `
+  let rows = db.query<{ id: number; repository: string }>(/* sql */ `
     select id, repository
     from npm_package
     where repository is not null
@@ -285,22 +268,9 @@ function fix_npm_repository() {
         username: repo_username,
         name: repo_name,
       } = parseRepoUrl(repo_url)
-      let domain_id =
-        find(proxy.domain, { host })?.id || proxy.domain.push({ host })
-      let repo_author_id =
-        find(proxy.author, { username: repo_username })?.id ||
-        proxy.author.push({ username: repo_username })
-      let repo_page_id =
-        find(proxy.page, { url: repo_url })?.id ||
-        proxy.page.push({
-          url: repo_url,
-          payload: null,
-          check_time: null,
-          update_time: null,
-        })
       let repo_id = proxy.repo.push({
-        domain_id,
-        author_id: repo_author_id,
+        domain_id: getId(proxy.domain, 'host', host),
+        author_id: getId(proxy.author, 'username', repo_username),
         name: repo_name,
         is_fork: null,
         url: repo_url,
@@ -313,7 +283,7 @@ function fix_npm_repository() {
         readme: null,
         last_commit: null,
         is_public: !!cleanRepoUrl(repo_url),
-        page_id: repo_page_id,
+        page_id: getId(proxy.page, 'url', repo_url),
       })
       repo = proxy.repo[repo_id]
     }
@@ -330,9 +300,7 @@ where domain_id is null
   for (let row of rows) {
     let repo = proxy.repo[row.id]
     let { host } = parseRepoUrl(repo.url)
-    let domain_id =
-      find(proxy.domain, { host })?.id || proxy.domain.push({ host })
-    repo.domain_id = domain_id
+    repo.domain_id = getId(proxy.domain, 'host', host)
   }
 }
 set_repo_domain()
