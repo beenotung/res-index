@@ -182,7 +182,7 @@ let select_npm_deps = db.prepare<
 >(/* sql */ `
 select
   npm_package.name
-, npm_package.type
+, npm_package_dependency.type
 from npm_package_dependency
 inner join npm_package on npm_package.id = npm_package_dependency.dependency_id
 where npm_package_dependency.package_id = :package_id
