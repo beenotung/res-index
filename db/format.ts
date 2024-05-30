@@ -13,6 +13,9 @@ export function cleanRepoUrl(url: string | null): string | null {
       return null
   }
 
+  // e.g. "git@github.com:https://github.com/LambdaIM/HdkeyJs"
+  url = url.replace(/.+https:\/\//, 'https://')
+
   // e.g. "git clone https://services.sungard.com/git/scm/~ricky.casey/cio-mobile-app"
   url = remove_prefix(url, 'git clone ')
 
