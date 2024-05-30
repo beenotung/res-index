@@ -14,6 +14,7 @@ import { db } from '../../../db/db.js'
 import { find } from 'better-sqlite3-proxy'
 import { EarlyTerminate, toRouteUrl } from '../helpers.js'
 import { binArray } from '@beenotung/tslib/array.js'
+import { Timer, startTimer } from '@beenotung/tslib/timer.js'
 
 let pageTitle = 'Dataset'
 let addPageTitle = 'Add Dataset'
@@ -416,7 +417,6 @@ async function post<Fn extends (input: any) => any>(
   body: Parameters<Fn>[0],
 ): Promise<ReturnType<Fn>> {
   let remote_origin = 'https://res-index.hkit.cc'
-  console.log('POST', url)
   let res = await fetch(remote_origin + url, {
     method: 'POST',
     headers: {
@@ -426,7 +426,6 @@ async function post<Fn extends (input: any) => any>(
     body: JSON.stringify(body),
   })
   let json = await res.json()
-  console.log('GOT', json)
   if (json.error) {
     throw new Error(json.error)
   }
@@ -508,25 +507,31 @@ let sync_npm_package: Sync<NpmPackageExport> = {
   on_receive_batch: on_receive_npm_package_batch,
 }
 
-async function run_sync<T>(sync: Sync<T>) {
+async function run_sync<T>(timer: Timer, sync: Sync<T>) {
   let batch_size = 200
   let json = await post<typeof sync.on_receive_list>(
     toRouteUrl(routes, sync.list_url),
     { receive_list: sync.select_list.all() },
   )
   let batches = binArray(json.need_list, batch_size)
+  let n = json.need_list.length
+  timer.setEstimateProgress(n)
   for (let key_batch of batches) {
     let export_batch = key_batch.map(sync.export_one)
     await post<typeof sync.on_receive_batch>(
       toRouteUrl(routes, sync.batch_url),
       { receive_list: export_batch },
     )
+    timer.tick(key_batch.length)
   }
 }
 
 async function sync_with_remote() {
-  await run_sync(sync_repo)
-  await run_sync(sync_npm_package)
+  let timer = startTimer('sync repos')
+  await run_sync(timer, sync_repo)
+  timer.next('sync npm packages')
+  await run_sync(timer, sync_npm_package)
+  timer.end()
 }
 
 if (import.meta.filename == process.argv[1]) {
