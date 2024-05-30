@@ -622,7 +622,29 @@ let published_npm_package_detail_parser = object({
     key: string({ sampleValue: '0.0.1' }),
     value: object({
       types: optional(
-        or([string(), array(string())]) as Parser<string | string[]>,
+        or([
+          string(),
+          array(string()),
+          object({
+            name: optional(string({ sampleValue: '@anclient/anreact' })),
+            author: optional(string({ sampleValue: 'ody-zhou' })),
+            version: optional(string({ sampleValue: '3.0.0' })),
+            main: optional(string({ sampleValue: './src/an-components.js' })),
+            types: optional(
+              string({ sampleValue: './ts/src/an-components.d.ts' }),
+            ),
+          }),
+        ]) as Parser<
+          | string
+          | string[]
+          | {
+              name?: string
+              author?: string
+              version?: string
+              main?: string
+              types?: string
+            }
+        >,
       ),
       typings: optional(string()),
       dependencies: optional(
@@ -783,6 +805,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (Array.isArray(types)) {
       // e.g. npm package: "@arpit09/angular-vanilla" uses empty array in the "types" field
       types = types.join()
+    }
+    if (types && typeof types == 'object') {
+      types = types.types
     }
     let has_types = !!(types?.trim() || version.typings?.trim())
     if (npm_package.has_types != has_types) npm_package.has_types = has_types
