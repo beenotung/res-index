@@ -425,11 +425,21 @@ async function post<Fn extends (input: any) => any>(
     },
     body: JSON.stringify(body),
   })
-  let json = await res.json()
-  if (json.error) {
-    throw new Error(json.error)
+  let text = await res.text()
+  try {
+    let json = JSON.parse(text)
+    if (json.error) {
+      throw new Error(json.error)
+    }
+    return json
+  } catch (error) {
+    console.log('Error: failed to parse response json')
+    console.log('response status:', res.status)
+    console.log('response text:')
+    console.log(text)
+    console.log()
+    throw error
   }
-  return json
 }
 
 let routes: Routes = {
