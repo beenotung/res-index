@@ -1,214 +1,125 @@
 import { isIP } from '@beenotung/tslib/url'
+import { proxy } from './proxy'
+import { filter, notNull } from 'better-sqlite3-proxy'
 
-let general_sites = ['github.com', 'gitlab.com', 'bitbucket.org']
+export function cleanRepoUrl(url: string | null): string | null {
+  if (!url || url.length <= 1) return null
 
-export function cleanRepoUrl(url: string): string | null {
   switch (url) {
-    case '-':
-    case 'none':
     case 'TBC':
     case 'FIXME':
     case 'npm/security-holder':
-      // e.g. npm package: typescript3 -> npm/security-holder
+    case 'none':
       return null
   }
 
-  // e.g. "https://www.npmjs.com/package/fkww"
-  if (url.startsWith('https://www.npmjs.com/')) {
-    return null
-  }
+  // e.g. "git clone https://services.sungard.com/git/scm/~ricky.casey/cio-mobile-app"
+  url = remove_prefix(url, 'git clone ')
 
   // e.g. "+https://github.com/swc-project/plugins"
-  if (url.startsWith('+http')) {
-    url = url.substring(1)
-  }
+  url = remove_prefix(url, '+')
+
+  // e.g. "git+https://github.com/beenotung/tslib.git"
+  url = remove_prefix(url, 'git+')
+  url = remove_suffix(url, '.git')
 
   // e.g. "hhttps://github.com/RodrigoMattosoSilveira/rms-sparklines"
-  if (url.startsWith('hhttps://')) {
-    url = url.substring(1)
-  }
+  url = url.replace(/^hhttps:\/\//, 'https://')
 
-  // e.g. "lukeed/sirv"
-  if (url.match(/^[\w-.]+\/[\w-.]+$/)) {
+  // e.g. "htts://github.com/sandhawke/webgram-logins"
+  url = url.replace(/^htts:\/\//, 'https://')
+
+  // e.g. "git://github:terra-money/wallet-provider"
+  url = url.replace('/github:', '/github.com:')
+  url = url.replace('/gitlab:', '/gitlab.com:')
+
+  // e.g. "git://github.com/beenotung/erlang.js"
+  url = url.replace(/^git:\/\//, 'https://')
+
+  // e.g. "ssh://git@github.com/beenotung/http-deceiver"
+  url = url.replace(/^ssh:\/\/[\w-.]+@/, 'https://')
+
+  // e.g. "ssh://gerrit.brightsign.biz:29418/bacon/fatback"
+  url = url.replace(/^ssh:\/\//, 'https://')
+
+  // e.g. "git:@github.com/acosom/node-rdkafka-acosom"
+  url = url.replace(/^git:@/, 'git@')
+
+  // e.g. "git@github.com:maleck13/readline"
+  // e.g. "git@github.com/coaraco/nest-tslint"
+  url = url.replace(
+    /^[\w-.]+@([\w-.]+)[:/]([\w-./]+)$/,
+    (_, host, pathname) => `https://${host}/${pathname}`,
+  )
+
+  // e.g. "http://github.com/jprichardson/terst"
+  url = url.replace(/^http:\/\//, 'https://')
+
+  // e.g. "https://github.com:uscreen/shipit-deploy-cd"
+  url = url.replace(
+    /^https:\/\/([\w-.]+):([\w-./]+)$/,
+    (_, host, pathname) => `https://${host}/${pathname}`,
+  )
+
+  // e.g. "https://git@bitbucket.org/knetikmedia/splyt-sdk-js"
+  url = url.replace(
+    /^https:\/\/[\w-.]+@([\w-.]+)/,
+    (_, rest) => `https://${rest}`,
+  )
+
+  // e.g. "github:Azure/azure-sdk-for-js"
+  url = url.replace(/^github:/, 'https://github.com/')
+
+  // e.g. "bitbucket.org:mysearchbot/traverz-core-ui"
+  url = url.replace(
+    /^([\w-]+)\.([\w-.]+):([\w-./]+)$/,
+    (_, host, ltd, pathname) => `https://${host}.${ltd}/${pathname}`,
+  )
+
+  // remove username before org name
+  // e.g. "https://github.com/gozala/@multiformats/base-x" -> "https://github.com/multiformats/base-x"
+  url = url.replace(
+    /^(\w+):\/\/([\w-.]+)\/[\w-.]+\/@([\w-.]+)\/([\w-.]+)$/,
+    (_, protocol, host, org, pathname) =>
+      `${protocol}://${host}/${org}/${pathname}`,
+  )
+
+  // e.g. "github.com/Ruthirakumar/firstRepostory"
+  url = url.replace(
+    /^([\w-]+)\.([\w-.]+)\/([\w-.]+)\/([\w-./]+)$/,
+    (_, host, ltd, org, pathname) =>
+      `https://${host}.${ltd}/${org}/${pathname}`,
+  )
+
+  // e.g. "Gotop1711/file-type/tree/file-type-browser-es5"
+  if (!url.startsWith('https://') && url.match(/^[\w- ]+\/[\w-./]+$/)) {
     url = 'https://github.com/' + url
-  }
-
-  // e.g. npm package: "post-or-save-package"
-  if (url == 'git+') {
-    return null
-  }
-
-  // e.g. 'git clone https://services.sungard.com/git/scm/~ricky.casey/cio-mobile-app'
-  if (url.startsWith('git clone ')) {
-    url = url.substring('git clone '.length)
-  }
-
-  // skip general site without repository name
-  // e.g. 'gitlab.com'
-  if (general_sites.includes(url)) {
-    return null
-  }
-
-  // fix protocol part
-  url = url
-    .replace(/\/^/, '')
-    .replace(/\.git$/, '')
-    // e.g. "git+https://github.com/beenotung/better-sqlite3-schema.git"
-    .replace(/^git\+https:\/\//, 'https://')
-    // e.g. "git+http://git.nrayvarz.ir/and-official/rayvarz/eoffice/rayflmc"
-    .replace(/^git\+http:\/\//, 'http://')
-    // e.g. "git://github.com/beenotung/erlang.js.git"
-    .replace(/^git:\/\//, 'https://')
-    // e.g. "git+ssh://git@github.com/beenotung/http-deceiver"
-    .replace(/^git\+ssh:\/\/git@/, 'https://')
-    // e.g. "ssh://git@github.com/yarnpkg/berry"
-    .replace(/^ssh:\/\/git@/, 'https://')
-    // e.g. "http://github.com/jprichardson/terst"
-    .replace(/^http:\/\/github.com\//, 'https://github.com/')
-    // e.g. "https://git@bitbucket.org/knetikmedia/splyt-sdk-js"
-    .replace(/:\/\/git@/, '://')
-
-  if (url.includes('@') && url.startsWith('https://')) {
-    let parts = url.split('/')
-    if (parts.length == 6 && parts[4].startsWith('@')) {
-      // remove username before org name
-      // e.g. "https://github.com/gozala/@multiformats/base-x"
-      parts[4] = parts[4].substring(1)
-      parts.splice(3, 1)
-    } else if (
-      parts.length == 5 &&
-      parts[2].includes('@') &&
-      !parts[2].startsWith('@') &&
-      !parts[2].endsWith('@')
-    ) {
-      // remove username before hostname
-      // e.g. "https://estepin@bitbucket.org/estepin/g-mfo-anket-sdk"
-      parts[2] = parts[2].split('@').pop()!
-    }
-    url = parts.join('/')
-  }
-
-  // skip IP-based repositories
-  // e.g. "http://10.70.71.36/vue/ei"
-  // e.g. "git@39.105.32.169:/mnt/git/elmer-redux"
-  if (
-    isIP(
-      url.startsWith('git@')
-        ? 'http://' + url.replace('git@', '').split(':')[0]
-        : url,
-    )
-  ) {
-    return null
-  }
-
-  // skip private repositories
-  if (
-    (url.startsWith('http://') && url.includes(':')) ||
-    url.startsWith('http://git.nrayvarz.ir')
-  ) {
-    return null
-  }
-
-  // e.g. "Luiz Didier/firebox-components"
-  if (url.includes(' ')) {
-    return null
-  }
-
-  url = url
-    // e.g. "git@gitlab.beisencorp.com:ux-cnpm/calendar.git"
-    .replace(/\.git$/, '')
-    // e.g. "git@github.com:maleck13/readline"
-    .replace(/^git@/, '')
-    // e.g. "git:@github.com/acosom/node-rdkafka-acosom"
-    .replace(/^git:@/, '')
-    // e.g. "github:Azure/azure-sdk-for-js"
-    .replace(/^github:/, 'https://github.com/')
-    // e.g. "github.com:indreshvishwakarma/sync-provider"
-    .replace(/^github.com:/, 'https://github.com/')
-    // e.g. "gitlab.com:TemplateMonster/PlasmaPlatform/Frontend/tm-service-dummy"
-    .replace(/^gitlab.com:/, 'https://gitlab.com/')
-    // e.g. "htts://github.com/sandhawke/webgram-logins"
-    .replace(/^htts:\/\//, 'https://')
-
-  // e.g. "github.com/acosom/node-rdkafka-acosom"
-  if (url.startsWith('github.com/') && url.split('/').length == 3) {
-    url = url.replace(/github.com/, 'https://github.com/')
-  }
-
-  // e.g. "git//git.epam.com/Yaroslav_Kharchenko/jsmp"
-  if (url.includes('/git.epam.com/')) {
-    // skip private repository
-    return null
-  }
-
-  // e.g. "gitlab.teamhologram.ninja:Hologram/holokit"
-  let match = url.match(/^(gitlab\.[\w-.]+):[\w-.]+\/[\w-.]+$/)
-  if (match && match[1] !== 'gitlab.com') {
-    // skip private repository
-    return null
-  }
-
-  // e.g. "github.com-godspeed:godspeedsystems/gs-node-service"
-  match = url.match(/^(github\.[\w-.]+):[\w-.]+\/[\w-.]+$/)
-  if (match && match[1] !== 'github.com') {
-    // skip private repository
-    return null
-  }
-
-  // e.g. "statechannels/monorepo/blob/master/packages/client-api-schema"
-  if (
-    url.match(/^[\w\/-]+$/) &&
-    !url.includes('github') &&
-    !url.includes('gitlab')
-  ) {
-    url = 'https://github.com/' + url
-  }
-
-  if (!url.startsWith('https://')) {
-    // e.g. git over ssh?
-    throw new Error('Invalid repository url: ' + url)
-  }
-
-  let parts = url.split('/')
-
-  // e.g. "github.com/bwqdxxg/Bwqdxxg-TsLint"
-  if (parts.length == 3 && general_sites.includes(parts[0])) {
-    url = 'https://' + url
-    parts = url.split('/')
-  }
-
-  // e.g. "https://developers.reddit.com/"
-  if (parts.length < 5) {
-    return null
-  }
-
-  // e.g. "https://th-adcc.visualstudio.com/Zenith/_git/zenith-common"
-  if (parts[2].endsWith('visualstudio.com')) {
-    // skip private repositories
-    return null
-  }
-
-  // e.g. "https://github.com/azawakh/twsh/issue"
-  // e.g. "https://github.com/citelab/JAMScript/lib/jdiscovery"
-  if (url.startsWith('https://github.com/')) {
-    while (parts.length > 5) {
-      parts.pop()
-    }
-  }
-
-  // e.g. "https://gitlab.com/plade/sdks/js"
-  // e.g. "https://git.reyah.ga/reyah/libraries/reyah-oauth-provider"
-  if (parts.length > 5) {
-    // throw new Error('Invalid repository url: ' + url)
   }
 
   // skip author page
   // e.g. "https://github.com/textioHQ/"
+  let parts = url.split('/')
   if (!parts[4]) {
     return null
   }
 
-  url = parts.join('/')
+  if (!url.startsWith('https://')) {
+    throw new Error('Invalid repository url: ' + url)
+  }
+
+  // e.g. "https://www.github.com/DefinitelyTyped/DefinitelyTyped"
+  url = url.replace(/^https:\/\/www\./, 'https://')
+
+  if (
+    !url.startsWith('https://github.com/') &&
+    !url.startsWith('https://gitlab.com/') &&
+    !url.startsWith('https://gitee.com/') &&
+    !url.startsWith('https://bitbucket.org/')
+  ) {
+    // skip private repo
+    return null
+  }
+
   return url
 }
 
@@ -221,3 +132,43 @@ export function parseRepoUrl(url: string) {
   let name = parts.slice(4).join('/')
   return { host, username, name }
 }
+
+function remove_prefix(text: string, pattern: string): string {
+  return text.startsWith(pattern) ? text.substring(pattern.length) : text
+}
+
+function remove_suffix(text: string, pattern: string): string {
+  return text.endsWith(pattern) ? text.slice(0, -pattern.length) : text
+}
+
+function test() {
+  let rows = filter(proxy.npm_package, { repository: notNull })
+  for (let row of rows) {
+    let url = cleanRepoUrl(row.repository)
+    if (
+      url?.startsWith('https://') &&
+      (!url.substring('https://'.length).includes(':') || url.match(/:\d+/)) &&
+      (!url.substring('https://'.length).includes('@') ||
+        url?.includes('/@dao-xyz/')) &&
+      !url.includes('readline') &&
+      !url.includes('base-x') &&
+      true
+    ) {
+      // normal?
+    } else {
+      console.log(row.repository, '->', url)
+    }
+    if (
+      url &&
+      ((!url.startsWith('https://') && url.includes(':')) ||
+        (url.includes('@') && !url.includes('@dao-xyz')))
+    ) {
+      debugger
+      console.log('???')
+      process.exit(1)
+    }
+  }
+}
+// if (process.argv[1] == __filename) {
+//   test()
+// }
