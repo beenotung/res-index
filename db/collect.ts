@@ -611,6 +611,27 @@ let unpublish_npm_package_detail_parser = object({
     }),
   }),
 })
+let types_parser = or([
+  string(),
+  array(string()),
+  object({
+    name: optional(string()),
+    author: optional(string()),
+    version: optional(string()),
+    main: optional(string()),
+    types: optional(string()),
+  }),
+]) as Parser<
+  | string
+  | string[]
+  | {
+      name?: string
+      author?: string
+      version?: string
+      main?: string
+      types?: string
+    }
+>
 let published_npm_package_detail_parser = object({
   'name': string(),
   'dist-tags': optional(
@@ -621,32 +642,8 @@ let published_npm_package_detail_parser = object({
   'versions': dict({
     key: string({ sampleValue: '0.0.1' }),
     value: object({
-      types: optional(
-        or([
-          string(),
-          array(string()),
-          object({
-            name: optional(string({ sampleValue: '@anclient/anreact' })),
-            author: optional(string({ sampleValue: 'ody-zhou' })),
-            version: optional(string({ sampleValue: '3.0.0' })),
-            main: optional(string({ sampleValue: './src/an-components.js' })),
-            types: optional(
-              string({ sampleValue: './ts/src/an-components.d.ts' }),
-            ),
-          }),
-        ]) as Parser<
-          | string
-          | string[]
-          | {
-              name?: string
-              author?: string
-              version?: string
-              main?: string
-              types?: string
-            }
-        >,
-      ),
-      typings: optional(string()),
+      types: optional(types_parser),
+      typings: optional(types_parser),
       dependencies: optional(
         dict({
           key: string({ sampleValue: 'better-sqlite3' }),
@@ -731,6 +728,20 @@ let packageTimeParser = object({
   ),
 })
 
+function hasTypes(
+  types: undefined | ParseResult<typeof types_parser>,
+): boolean {
+  if (Array.isArray(types)) {
+    // e.g. npm package: "@arpit09/angular-vanilla" uses empty array in the "types" field
+    types = types.join()
+  }
+  if (types && typeof types == 'object') {
+    // e.g. npm package "@anclient/anreact" use object to represent the name,version,author,main,types
+    types = types.types
+  }
+  return !!types?.trim()
+}
+
 function saveJSON(filename: string, payload: string) {
   writeFileSync(filename, JSON.stringify(JSON.parse(payload), null, 2))
 }
@@ -801,15 +812,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.deprecated != deprecated)
       npm_package.deprecated = deprecated
 
-    let types = version.types
-    if (Array.isArray(types)) {
-      // e.g. npm package: "@arpit09/angular-vanilla" uses empty array in the "types" field
-      types = types.join()
-    }
-    if (types && typeof types == 'object') {
-      types = types.types
-    }
-    let has_types = !!(types?.trim() || version.typings?.trim())
+    let has_types = hasTypes(version.types) || hasTypes(version.typings)
     if (npm_package.has_types != has_types) npm_package.has_types = has_types
 
     function findAuthor() {
