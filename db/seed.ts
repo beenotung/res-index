@@ -6,7 +6,7 @@ import { readdirSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
-import { npm_package_detail_parser } from './collect'
+import { hasTypes, npm_package_detail_parser } from './collect'
 import { getLanguageId } from './store'
 import { env } from './env'
 
@@ -199,7 +199,7 @@ where npm_package.has_types is null
       types = types.join()
     }
 
-    let has_types = !!(types?.trim() || version.typings?.trim())
+    let has_types = hasTypes(version.types) || hasTypes(version.typings)
     proxy.npm_package[row.id].has_types = has_types
   }
 }

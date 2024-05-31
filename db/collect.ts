@@ -728,7 +728,7 @@ let packageTimeParser = object({
   ),
 })
 
-function hasTypes(
+export function hasTypes(
   types: undefined | ParseResult<typeof types_parser>,
 ): boolean {
   if (Array.isArray(types)) {

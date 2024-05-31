@@ -74,6 +74,7 @@ export function cleanRepoUrl(url: string | null): string | null {
   url = url.replace(/^github:/, 'https://github.com/')
 
   // e.g. "bitbucket.org:mysearchbot/traverz-core-ui"
+  // e.g. "code.aliyun.com:673671308/typeS_crawler"
   url = url.replace(
     /^([\w-]+)\.([\w-.]+):([\w-./]+)$/,
     (_, host, ltd, pathname) => `https://${host}.${ltd}/${pathname}`,
