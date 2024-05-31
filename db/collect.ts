@@ -25,6 +25,8 @@ import {
   or,
   string,
   url,
+  InvalidInputError,
+  ParserContext,
 } from 'cast.ts'
 import { cleanRepoUrl, parseRepoUrl } from './format'
 import { getLanguageId } from './store'
@@ -291,7 +293,7 @@ async function checkGithubRepositories(
   return res
 }
 
-let nullable_int = nullable(int({ min: 0 }))
+let nullable_int = nullable(int({ min: 0, readable: true }))
 let nullable_date = nullable(date())
 
 // FIXME handle case when it is private or deleted
