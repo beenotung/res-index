@@ -122,7 +122,10 @@ select * from npm_package where name = :name
 
 type RepoExport = ReturnType<typeof export_repo>
 function export_repo(url: string) {
-  let repo = select_repo_by_url.get({ url })!
+  let repo = select_repo_by_url.get({ url })
+  if (!repo) {
+    throw new Error('repo not found, url: ' + url)
+  }
   return {
     id: repo.id,
     domain: proxy.domain[repo.domain_id].host,
@@ -222,26 +225,18 @@ function export_npm_package(name: string) {
 
 type ListItem = { key: string; check_time: number | null }
 
-let select_repo_list = db
-  .prepare<void[], ListItem>(
-    /* sql */ `
+let select_repo_list = db.prepare<void[], ListItem>(/* sql */ `
 select repo.url as key, page.check_time from repo
 inner join page on page.id = repo.page_id
 order by repo.id asc
-`,
-  )
-  .pluck()
+`)
 
-let select_npm_package_list = db
-  .prepare<void[], ListItem>(
-    /* sql */ `
-select npm_package.name, page.check_time from npm_package
+let select_npm_package_list = db.prepare<void[], ListItem>(/* sql */ `
+select npm_package.name as key, page.check_time from npm_package
 inner join page on page.id = npm_package.page_id
 where page.check_time is not null
 order by npm_package.id asc
-`,
-  )
-  .pluck()
+`)
 
 type ReceivedList = {
   unchecked: string[]
@@ -255,11 +250,11 @@ function on_receive_list(input: {
   // build local index
   let local_unchecked = new Set<string>()
   let local_check_times = new Map<string, number>()
-  for (let row of input.select_list.all()) {
-    if (row.check_time) {
-      local_check_times.set(row.key, row.check_time)
+  for (let { key, check_time } of input.select_list.all()) {
+    if (check_time) {
+      local_check_times.set(key, check_time)
     } else {
-      local_unchecked.add(row.key)
+      local_unchecked.add(key)
     }
   }
 
@@ -449,6 +444,7 @@ async function post<Fn extends (input: any) => any>(
   body: Parameters<Fn>[0],
 ): Promise<ReturnType<Fn>> {
   let remote_origin = 'https://res-index.hkit.cc'
+  // let remote_origin = 'http://localhost:8520'
   let res = await fetch(remote_origin + url, {
     method: 'POST',
     headers: {
@@ -559,7 +555,8 @@ async function run_sync<T>(timer: Timer, sync: Sync<T>) {
   let list: ReceivedList = { unchecked: [], checked: [] }
   {
     let { unchecked, checked } = list
-    for (let { key, check_time } of sync.select_list.all()) {
+    for (let row of sync.select_list.all()) {
+      let { key, check_time } = row
       if (check_time) {
         checked.push([key, check_time])
       } else {
