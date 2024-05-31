@@ -220,32 +220,64 @@ function export_npm_package(name: string) {
   }
 }
 
+type ListItem = { key: string; check_time: number | null }
+
 let select_repo_list = db
-  .prepare<void[], string>(
+  .prepare<void[], ListItem>(
     /* sql */ `
-select url from repo
+select repo.url as key, page.check_time from repo
+inner join page on page.id = repo.page_id
+order by repo.id asc
 `,
   )
   .pluck()
 
 let select_npm_package_list = db
-  .prepare<void[], string>(
+  .prepare<void[], ListItem>(
     /* sql */ `
-select name from npm_package
+select npm_package.name, page.check_time from npm_package
+inner join page on page.id = npm_package.page_id
+where page.check_time is not null
+order by npm_package.id asc
 `,
   )
   .pluck()
 
-function on_receive_repo_list(input: { receive_list: string[] }) {
-  let has_list = new Set(select_repo_list.all())
-  let need_list = input.receive_list.filter(name => !has_list.has(name))
-  return { need_list }
+type ReceivedList = {
+  unchecked: string[]
+  checked: [key: string, check_time: number][]
 }
 
-function on_receive_npm_package_list(input: { receive_list: string[] }) {
-  let has_list = new Set(select_npm_package_list.all())
-  let need_list = input.receive_list.filter(name => !has_list.has(name))
-  return { need_list }
+function on_receive_list(input: {
+  received_list: ReceivedList
+  select_list: { all(): ListItem[] }
+}) {
+  // build local index
+  let local_unchecked = new Set<string>()
+  let local_check_times = new Map<string, number>()
+  for (let row of input.select_list.all()) {
+    if (row.check_time) {
+      local_check_times.set(row.key, row.check_time)
+    } else {
+      local_unchecked.add(row.key)
+    }
+  }
+
+  // compare with received list
+  let want_list: string[] = []
+  for (let key of input.received_list.unchecked) {
+    if (!local_unchecked.has(key) && !local_check_times.has(key)) {
+      want_list.push(key)
+    }
+  }
+  for (let [key, check_time] of input.received_list.checked) {
+    let local_time = local_check_times.get(key)
+    if (!local_time || local_time < check_time) {
+      want_list.push(key)
+    }
+  }
+
+  return { want_list }
 }
 
 function upsert<Table extends { id?: number | null }>(
@@ -453,7 +485,10 @@ let routes: Routes = {
     title: apiEndpointTitle,
     description: 'TODO',
     streaming: false,
-    resolve: context => brideToFn(context, sync_repo.on_receive_list),
+    resolve: context =>
+      brideToFn(context, ({ list }) =>
+        on_receive_list({ received_list: list, select_list: select_repo_list }),
+      ),
   },
   '/dataset/repo/batch': {
     title: apiEndpointTitle,
@@ -465,7 +500,13 @@ let routes: Routes = {
     title: apiEndpointTitle,
     description: 'TODO',
     streaming: false,
-    resolve: context => brideToFn(context, sync_npm_package.on_receive_list),
+    resolve: context =>
+      brideToFn(context, ({ list }) =>
+        on_receive_list({
+          received_list: list,
+          select_list: select_npm_package_list,
+        }),
+      ),
   },
   '/dataset/npm_package/batch': {
     title: apiEndpointTitle,
@@ -493,10 +534,7 @@ function brideToFn<Fn extends (input: any) => any>(
 type Sync<T> = {
   list_url: string
   batch_url: string
-  select_list: { all: () => string[] }
-  on_receive_list: (input: { receive_list: string[] }) => {
-    need_list: string[]
-  }
+  select_list: { all: () => ListItem[] }
   export_one: (key: string) => T
   on_receive_batch: (input: { receive_list: T[] }) => object
 }
@@ -504,7 +542,6 @@ let sync_repo: Sync<RepoExport> = {
   list_url: toRouteUrl(routes, '/dataset/repo/list'),
   batch_url: toRouteUrl(routes, '/dataset/repo/batch'),
   select_list: select_repo_list,
-  on_receive_list: on_receive_repo_list,
   export_one: export_repo,
   on_receive_batch: on_receive_repo_batch,
 }
@@ -512,19 +549,29 @@ let sync_npm_package: Sync<NpmPackageExport> = {
   list_url: toRouteUrl(routes, '/dataset/npm_package/list'),
   batch_url: toRouteUrl(routes, '/dataset/npm_package/batch'),
   select_list: select_npm_package_list,
-  on_receive_list: on_receive_npm_package_list,
   export_one: export_npm_package,
   on_receive_batch: on_receive_npm_package_batch,
 }
 
 async function run_sync<T>(timer: Timer, sync: Sync<T>) {
   let batch_size = 200
-  let json = await post<typeof sync.on_receive_list>(
-    toRouteUrl(routes, sync.list_url),
-    { receive_list: sync.select_list.all() },
-  )
-  let batches = binArray(json.need_list, batch_size)
-  let n = json.need_list.length
+
+  let list: ReceivedList = { unchecked: [], checked: [] }
+  {
+    let { unchecked, checked } = list
+    for (let { key, check_time } of sync.select_list.all()) {
+      if (check_time) {
+        checked.push([key, check_time])
+      } else {
+        unchecked.push(key)
+      }
+    }
+  }
+  let json = await post(toRouteUrl(routes, sync.list_url), { list })
+  let want_list = json.want_list as string[]
+
+  let batches = binArray(want_list, batch_size)
+  let n = want_list.length
   timer.setEstimateProgress(n)
   for (let key_batch of batches) {
     let export_batch = key_batch.map(sync.export_one)
