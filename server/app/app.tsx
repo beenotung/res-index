@@ -163,7 +163,7 @@ function Footer(attrs: { style?: string }) {
         (attrs.style || '')
       }
     >
-      <PickLanguage style="text-align: end" />
+      {/* <PickLanguage style="text-align: end" /> */}
       <Stats />
     </footer>
   )
