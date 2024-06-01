@@ -18,8 +18,19 @@ This project aim to actively index some github repositories and npm packages to 
 
 In addition, this project try be SEO-friendly. Hopefully, it can improve google's search result overtime.
 
----
+## Development
 
-Powered by [ts-liveview](https://github.com/beenotung/ts-liveview/blob/v5-auth-web-template/README.md)
+This project is powered by [ts-liveview](https://github.com/beenotung/ts-liveview/blob/v5-auth-web-template/README.md)
 
 See [help.txt](help.txt) to get started.
+
+## License
+
+This project is licensed with [BSD-2-Clause](./LICENSE)
+
+This is free, libre, and open-source software. It comes down to four essential freedoms [[ref]](https://seirdy.one/2021/01/27/whatsapp-and-the-domestication-of-users.html#fnref:2):
+
+- The freedom to run the program as you wish, for any purpose
+- The freedom to study how the program works, and change it so it does your computing as you wish
+- The freedom to redistribute copies so you can help others
+- The freedom to distribute copies of your modified versions to others
