@@ -1,3 +1,4 @@
+import About from './pages/about.js'
 import Dataset from './pages/dataset.js'
 import { capitalize } from '@beenotung/tslib/string.js'
 import { Router } from 'url-router.ts'
@@ -73,6 +74,7 @@ let routeDict: Routes = {
     menuText: 'Home',
     node: Home,
   },
+  ...About.routes,
   ...Dataset.routes,
   // ...DemoToast.routes,
   '/user-agents': {
