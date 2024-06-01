@@ -1,4 +1,4 @@
-import { filter, find, seedRow, getId, update } from 'better-sqlite3-proxy'
+import { filter, find, seedRow, getId, update, del } from 'better-sqlite3-proxy'
 import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
@@ -6,7 +6,7 @@ import { readdirSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
-import { hasTypes, npm_package_detail_parser } from './collect'
+import { hasTypes, npm_package_detail_parser, storeNpmPackage } from './collect'
 import { getLanguageId } from './store'
 import { env } from './env'
 
@@ -422,3 +422,67 @@ where id = :id
   )
 }
 fix_npm_package_deprecated()
+
+function fix_relative_npm_package_name() {
+  // e.g. fix "../serve-static" to "serve-static"
+
+  let update_dep_1 = db.prepare<{ new_id: number; old_id: number }>(/* sql */ `
+update npm_package_dependency
+set dependency_id = :new_id
+where dependency_id  = :old_id
+`)
+
+  let update_dep_2 = db.prepare<{ new_id: number; old_id: number }>(/* sql */ `
+update npm_package_dependency
+set package_id = :new_id
+where package_id  = :old_id
+`)
+
+  let update_keyword = db.prepare<{
+    new_id: number
+    old_id: number
+  }>(/* sql */ `
+update npm_package_keyword
+set npm_package_id = :new_id
+where npm_package_id  = :old_id
+`)
+
+  let rows = db
+    .prepare<
+      void[],
+      {
+        id: number
+        name: string
+        page_id: number
+        download_page_id: number
+        dependent_page_id: number
+      }
+    >(
+      /* sql */ `
+select
+  id
+, name
+, page_id
+, download_page_id
+, dependent_page_id
+from npm_package
+where name like '../%'
+`,
+    )
+    .all()
+
+  for (let row of rows) {
+    let name = row.name.replace('../', '')
+    let new_id =
+      find(proxy.npm_package, { name })?.id || storeNpmPackage({ name })
+    let old_id = row.id
+    update_dep_1.run({ new_id, old_id })
+    update_dep_2.run({ new_id, old_id })
+    update_keyword.run({ new_id, old_id })
+    delete proxy.npm_package[row.id]
+    delete proxy.page[row.page_id]
+    delete proxy.page[row.download_page_id]
+    delete proxy.page[row.dependent_page_id]
+  }
+}
+db.transaction(fix_relative_npm_package_name).immediate()

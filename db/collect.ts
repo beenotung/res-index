@@ -538,7 +538,7 @@ async function collectNpmPackages(
   })()
 }
 
-function storeNpmPackage(pkg: {
+export function storeNpmPackage(pkg: {
   scope?: string
   name: string
   desc?: string | null
@@ -988,6 +988,13 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
           type,
         })
         return
+      }
+      for (let name in deps) {
+        if (name.startsWith('../')) {
+          let new_name = name.replace('../', '')
+          deps[new_name] = deps[name]
+          delete deps[name]
+        }
       }
       let names = Object.keys(deps)
       for (let row of filter(proxy.npm_package_dependency, {
