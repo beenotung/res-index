@@ -2,6 +2,8 @@
 
 A searchable index for development resources, including github repo and npm packages.
 
+Hosted on [res-index.hkit.cc](https://res-index.hkit.cc/)
+
 ## Why yet another index?
 
 **In short, the search functionality on google and github are unsatisfied. This project aim to build a better alternative and potentially improve google's search result.**
