@@ -691,7 +691,15 @@ let published_npm_package_detail_parser = object({
   'homepage': optional(
     or([string(), array(string())]) as Parser<string | string[]>,
   ),
-  'keywords': optional(array(string())),
+  'keywords': optional(
+    array(
+      or([
+        string(),
+        // e.g. npm package "@divriots/dockit-stencil" put string[][] in the keywords field
+        array(string()),
+      ]) as Parser<string | string[]>,
+    ),
+  ),
   'repository': optional<ParseResult<typeof npm_repository_parser>>(
     npm_repository_parser,
   ),
@@ -960,12 +968,13 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     let npm_package_id = npm_package.id!
 
     /* npm package keywords */
+    let keywords = pkg.keywords?.flatMap(string_or_array => string_or_array)
     for (let row of filter(proxy.npm_package_keyword, { npm_package_id })) {
-      if (!pkg.keywords || !pkg.keywords.includes(row.keyword!.name)) {
+      if (!keywords || !keywords.includes(row.keyword!.name)) {
         delete proxy.npm_package_keyword[row.id!]
       }
     }
-    for (let name of pkg.keywords || []) {
+    for (let name of keywords || []) {
       let keyword_id = getId(proxy.keyword, 'name', name)
       find(proxy.npm_package_keyword, { npm_package_id, keyword_id }) ||
         proxy.npm_package_keyword.push({ npm_package_id, keyword_id })
