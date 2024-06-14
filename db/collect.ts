@@ -647,6 +647,24 @@ let types_parser = or([
       types?: string
     }
 >
+let homepage_parser = or([
+  string({
+    sampleValue: 'https://github.com/neoswap-ai/neo-swap-npm#readme',
+  }),
+  array(string()),
+]) as Parser<string | string[]>
+let bugs_parser = or([
+  object({
+    url: string({ sampleValue: 'https://github.com/azawakh/twsh/issue' }),
+  }),
+  object({
+    email: email(),
+  }),
+  string({
+    sampleValue:
+      'https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen',
+  }),
+]) as Parser<{ url: string } | { email: string } | string>
 let published_npm_package_detail_parser = object({
   'name': string(),
   'dist-tags': optional(
@@ -657,6 +675,8 @@ let published_npm_package_detail_parser = object({
   'versions': dict({
     key: string({ sampleValue: '0.0.1' }),
     value: object({
+      homepage: optional(homepage_parser),
+      bugs: optional(bugs_parser),
       types: optional(types_parser),
       typings: optional(types_parser),
       dependencies: optional(
@@ -701,9 +721,7 @@ let published_npm_package_detail_parser = object({
   }),
   'time': dict({ key: string(), value: date() }),
   'description': optional(string()),
-  'homepage': optional(
-    or([string(), array(string())]) as Parser<string | string[]>,
-  ),
+  'homepage': optional(homepage_parser),
   'keywords': optional(
     array(
       or([
@@ -716,20 +734,7 @@ let published_npm_package_detail_parser = object({
   'repository': optional<ParseResult<typeof npm_repository_parser>>(
     npm_repository_parser,
   ),
-  'bugs': optional(
-    or([
-      object({
-        url: string({ sampleValue: 'https://github.com/azawakh/twsh/issue' }),
-      }),
-      object({
-        email: email(),
-      }),
-      string({
-        sampleValue:
-          'https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen',
-      }),
-    ]) as Parser<{ url: string } | { email: string } | string>,
-  ),
+  'bugs': optional(bugs_parser),
   'readme': optional(string()),
 })
 let not_found_npm_package_detail_parser = object({
@@ -750,6 +755,27 @@ let packageTimeParser = object({
     }),
   ),
 })
+
+function takeString(
+  value: string | string[] | null | undefined,
+): string | undefined {
+  if (typeof value == 'string') return value
+  if (Array.isArray(value)) {
+    return value.find(value => value)
+  }
+}
+
+function takeBugs(
+  bugs: undefined | ParseResult<typeof bugs_parser>,
+): string | null {
+  return !bugs
+    ? null
+    : typeof bugs == 'string'
+      ? bugs
+      : 'url' in bugs
+        ? bugs.url
+        : null
+}
 
 export function hasTypes(
   types: undefined | ParseResult<typeof types_parser>,
@@ -891,6 +917,38 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.file_count != file_count)
       npm_package.file_count = file_count
 
+    let versions = Object.values(pkg.versions)
+
+    // e.g. "https://github.com/neoswap-ai/neo-swap-npm#readme"
+    let homepage =
+      takeString(pkg.homepage) ||
+      versions.map(version => takeString(version.homepage)).find(url => url) ||
+      null
+    if (npm_package.homepage != homepage) npm_package.homepage = homepage
+    let homepage_repo = () => {
+      if (
+        typeof homepage === 'string' &&
+        homepage.startsWith('https://github.com/')
+      ) {
+        return homepage.replace(/#readme$/, '')
+      }
+      return null
+    }
+
+    // e.g. "https://github.com/azawakh/twsh/issue"
+    // e.g. "https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen"
+    let bugs =
+      takeBugs(pkg.bugs) ||
+      versions.map(version => takeBugs(version.bugs)).find(url => url)
+    let bug_repo = () => {
+      let parts = bugs?.split('/')
+      if (parts?.length == 6) {
+        parts.pop()
+        return parts.join('/')
+      }
+      return null
+    }
+
     // e.g. "https://github.com/beenotung/zstd.ts"
     let repository =
       typeof pkg.repository == 'string'
@@ -916,21 +974,15 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       // e.g. "Glimpse/Home"
       repository = null
     }
-    if (!repository && pkg.bugs) {
-      let url =
-        typeof pkg.bugs == 'string'
-          ? pkg.bugs
-          : 'url' in pkg.bugs
-            ? pkg.bugs.url
-            : ''
-      // e.g. "https://github.com/azawakh/twsh/issue"
-      // e.g. "https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen"
-      let parts = url.split('/')
-      if (parts.length == 6) {
-        parts.pop()
-        repository = parts.join('/')
-      }
+    function findFallbackRepository() {
+      function parseHomepage(url: string) {}
     }
+    repository =
+      // e.g. "git+htt// Data after initializing the swapps://github.com/neoswap-ai/neo-swap-npm.git"
+      (repository?.includes(' ') ? null : repository) ||
+      bug_repo() ||
+      homepage_repo() ||
+      repository
     let repo_url = repository ? cleanRepoUrl(repository) : null
 
     if (npm_package.repository != repository)
@@ -968,12 +1020,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         npm_package.repo_id = repo.id!
       }
     }
-
-    let homepage = pkg.homepage || null
-    if (Array.isArray(homepage)) {
-      homepage = homepage.find(url => url) || null
-    }
-    if (npm_package.homepage != homepage) npm_package.homepage = homepage
 
     let readme = pkg.readme || null
     if (npm_package.readme != readme) npm_package.readme = readme
