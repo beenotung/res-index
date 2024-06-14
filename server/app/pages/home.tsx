@@ -74,12 +74,20 @@ function autoFocusKeyword() {
 autoFocusKeyword()
 
 function hideHints() {
-  let hide_hint_until = Date.now() + 1 * ${DAY}
+  let hide_interval = +localStorage.getItem('hide_interval') || 0
+  if (!hide_interval) {
+    hide_interval = 1
+  } else {
+    hide_interval *= 1.5
+  }
+  localStorage.setItem('hide_interval', hide_interval)
+  let hide_hint_until = Date.now() + hide_interval * ${DAY}
   localStorage.setItem('hide_hint_until', hide_hint_until)
   searchForm.classList.add('hide-hints')
 }
 function showHints() {
   localStorage.removeItem('hide_hint_until')
+  localStorage.removeItem('hide_interval')
   searchForm.classList.remove('hide-hints')
 }
 function autoHideHints() {
