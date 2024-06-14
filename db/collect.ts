@@ -79,6 +79,19 @@ async function collectPendingPages(page: GracefulPage) {
       await later(5000)
       dependent_rate_limited = false
     }
+    pages.sort((a, b) => {
+      // check for repo
+      let a_matched = a.url.includes('beeno')
+      let b_matched = b.url.includes('beeno')
+      if (a_matched && b_matched) return 0
+      if (a_matched && !b_matched) return -1
+      if (!a_matched && b_matched) return 1
+
+      // TODO check for npm_package
+
+      // fallback
+      return 0
+    })
     timer.setEstimateProgress(pages.length)
     for (let { id, url } of pages) {
       // timer.progress(' > url: ' + url)
