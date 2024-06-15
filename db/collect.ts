@@ -655,7 +655,10 @@ let homepage_parser = or([
 ]) as Parser<string | string[]>
 let bugs_parser = or([
   object({
-    url: string({ sampleValue: 'https://github.com/azawakh/twsh/issue' }),
+    // e.g. the url is optional in npm_package "neat"
+    url: optional(
+      string({ sampleValue: 'https://github.com/azawakh/twsh/issue' }),
+    ),
   }),
   object({
     email: email(),
