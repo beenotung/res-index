@@ -3,6 +3,7 @@ import { proxy } from './proxy'
 import { filter, notNull } from 'better-sqlite3-proxy'
 
 export function cleanRepoUrl(url: string | null): string | null {
+  url = url ? url.trim() : url
   if (!url || url.length <= 1) return null
 
   switch (url) {
@@ -12,6 +13,9 @@ export function cleanRepoUrl(url: string | null): string | null {
     case 'none':
       return null
   }
+
+  // e.g. "https: //github.com/FredrikOseberg/react-util-kit"
+  url = url.replace(/https: /, 'https:')
 
   // e.g. "git@github.com:https://github.com/LambdaIM/HdkeyJs"
   url = url.replace(/.+https:\/\//, 'https://')
