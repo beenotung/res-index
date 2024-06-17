@@ -14,6 +14,9 @@ export function cleanRepoUrl(url: string | null): string | null {
       return null
   }
 
+  // e.g. "//github.com/synedra/astra-setup"
+  url = url.replace(/^\/\/github.com\/$/, 'https://github.com/')
+
   // e.g. "https: //github.com/FredrikOseberg/react-util-kit"
   url = url.replace(/https: /, 'https:')
 
