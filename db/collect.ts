@@ -977,9 +977,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       // e.g. "Glimpse/Home"
       repository = null
     }
-    function findFallbackRepository() {
-      function parseHomepage(url: string) {}
-    }
     repository =
       // e.g. "git+htt// Data after initializing the swapps://github.com/neoswap-ai/neo-swap-npm.git"
       (repository?.includes(' ') ? null : repository) ||
