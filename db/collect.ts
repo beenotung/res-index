@@ -30,6 +30,7 @@ import {
 } from 'cast.ts'
 import { cleanRepoUrl, parseRepoUrl } from './format'
 import { getLanguageId } from './store'
+import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
 
 // TODO get repo list from username (npm package > repo > username > repo list)
 // TODO continues updates each pages
@@ -725,15 +726,7 @@ let published_npm_package_detail_parser = object({
   'time': dict({ key: string(), value: date() }),
   'description': optional(string()),
   'homepage': optional(homepage_parser),
-  'keywords': optional(
-    array(
-      or([
-        string(),
-        // e.g. npm package "@divriots/dockit-stencil" put string[][] in the keywords field
-        array(string()),
-      ]) as Parser<string | string[]>,
-    ),
-  ),
+  'keywords': optional(npm_keywords_parser),
   'repository': optional<ParseResult<typeof npm_repository_parser>>(
     npm_repository_parser,
   ),
@@ -1027,13 +1020,13 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     let npm_package_id = npm_package.id!
 
     /* npm package keywords */
-    let keywords = pkg.keywords?.flatMap(string_or_array => string_or_array)
+    let keywords = parse_npm_keywords(pkg.keywords)
     for (let row of filter(proxy.npm_package_keyword, { npm_package_id })) {
       if (!keywords || !keywords.includes(row.keyword!.name)) {
         delete proxy.npm_package_keyword[row.id!]
       }
     }
-    for (let name of keywords || []) {
+    for (let name of keywords) {
       let keyword_id = getId(proxy.keyword, 'name', name)
       find(proxy.npm_package_keyword, { npm_package_id, keyword_id }) ||
         proxy.npm_package_keyword.push({ npm_package_id, keyword_id })
