@@ -18,7 +18,10 @@ export function cleanRepoUrl(url: string | null): string | null {
   url = url.replace(/^\/\/github.com\//, 'https://github.com/')
 
   // e.g. "https: //github.com/FredrikOseberg/react-util-kit"
-  url = url.replace(/https: /, 'https:')
+  url = url.replace(/^https: /, 'https:')
+
+  // e.g. "htttps://github.com/archisdi/zuu"
+  url = url.replace(/^htttps:/, 'https:')
 
   // e.g. "git@github.com:https://github.com/LambdaIM/HdkeyJs"
   url = url.replace(/.+https:\/\//, 'https://')
