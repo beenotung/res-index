@@ -8,7 +8,7 @@
   "license": "BSD-2-Clause",
   "main": "index.js",
   "scripts": {
-    "test":"ts-node test",
+    "test": "ts-node test",
     "setup": "run-s migrate seed",
     "dev": "run-s migrate update",
     "update": "run-s gen-migrate migrate gen-proxy",
