@@ -14,6 +14,14 @@ import { env } from './env'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
+function run(fn: () => unknown) {
+  process.stdout.write(fn.name + '()...')
+  console.time(fn.name)
+  db.transaction(fn)()
+  process.stdout.write('\r')
+  console.timeEnd(fn.name)
+}
+
 function seed_local_repo() {
   function reset() {
     db.exec('delete from repo')
@@ -80,7 +88,7 @@ function seed_local_repo() {
   }
 }
 if (env.NODE_ENV == 'development') {
-  seed_local_repo()
+  run(seed_local_repo)
 }
 
 function fix_language_name() {
@@ -110,7 +118,7 @@ set seq = 1
   fix({ from: 'TypeScript', to: 'Typescript' })
   fix({ from: 'JavaScript', to: 'Javascript' })
 }
-fix_language_name()
+run(fix_language_name)
 
 function fix_npm_page_url() {
   let prefix = 'https://www.npmjs.com/package/'
@@ -141,7 +149,7 @@ function fix_npm_page_url() {
     update_page_url.run({ id: page.id, new_url })
   }
 }
-fix_npm_page_url()
+run(fix_npm_page_url)
 
 function getNpmPackageLatestVersion(payload: string) {
   let json = JSON.parse(payload)
@@ -175,7 +183,7 @@ where npm_package.deprecated is null
     proxy.npm_package[row.id].deprecated = deprecated
   }
 }
-set_npm_package__deprecated()
+run(set_npm_package__deprecated)
 
 function set_npm_package__has_types() {
   let rows = db
@@ -204,7 +212,7 @@ where npm_package.has_types is null
     proxy.npm_package[row.id].has_types = has_types
   }
 }
-set_npm_package__has_types()
+run(set_npm_package__has_types)
 
 function fix_npm_download() {
   let prefix = 'https://api.npmjs.org/downloads/point/last-day/'
@@ -222,7 +230,7 @@ function fix_npm_download() {
     )
   }
 }
-fix_npm_download()
+run(fix_npm_download)
 
 function remove_invalid_repo_url() {
   let rows = db.query<{
@@ -246,7 +254,7 @@ function remove_invalid_repo_url() {
     }
   }
 }
-db.transaction(remove_invalid_repo_url).immediate()
+run(remove_invalid_repo_url)
 
 function deleteRepo(repo_id: number) {
   if (!(repo_id in proxy.repo)) {
@@ -291,7 +299,7 @@ where url like '%@%'
     deleteRepo(row.repo_id)
   }
 }
-db.transaction(fix_repo_url).immediate()
+run(fix_repo_url)
 
 function fix_npm_repository() {
   let rows = db.query<{ id: number; repository: string }>(/* sql */ `
@@ -335,7 +343,7 @@ function fix_npm_repository() {
     proxy.npm_package[id].repo_id = repo.id!
   }
 }
-fix_npm_repository()
+run(fix_npm_repository)
 
 function set_repo_domain() {
   let rows = db.query(/* sql */ `
@@ -348,7 +356,7 @@ where domain_id is null
     repo.domain_id = getId(proxy.domain, 'host', host)
   }
 }
-set_repo_domain()
+run(set_repo_domain)
 
 function check_repo_is_public() {
   // let repos = filter(proxy.repo, { is_public: null })
@@ -366,7 +374,7 @@ where is_public = 1
   )
 `)
 }
-check_repo_is_public()
+run(check_repo_is_public)
 
 function fix_npm_package_deprecated() {
   let ids = db
@@ -422,7 +430,7 @@ where id = :id
       '\r',
   )
 }
-fix_npm_package_deprecated()
+run(fix_npm_package_deprecated)
 
 function fix_relative_npm_package_name() {
   // e.g. fix "../serve-static" to "serve-static"
@@ -486,4 +494,4 @@ where name like '../%'
     delete proxy.page[row.dependent_page_id]
   }
 }
-db.transaction(fix_relative_npm_package_name).immediate()
+run(fix_relative_npm_package_name)
