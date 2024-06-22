@@ -52,6 +52,9 @@ export function cleanRepoUrl(url: string | null): string | null {
   // e.g. "git://github.com/beenotung/erlang.js"
   url = url.replace(/^git:\/\//, 'https://')
 
+  // e.g. "gitssh://git@github.com/SRND/Topo"
+  url = url.replace(/^gitssh:\/\/git@/, 'ssh://git@')
+
   // e.g. "ssh://git@github.com/beenotung/http-deceiver"
   url = url.replace(/^ssh:\/\/[\w-.]+@/, 'https://')
 
