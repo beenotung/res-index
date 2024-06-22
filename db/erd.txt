@@ -147,7 +147,7 @@ forks integer NULL
 readme text NULL
 last_commit integer NULL
 is_public boolean NULL
-page_id integer FK >0- page.id
+page_id integer unique FK >0- page.id
 
 
 keyword
@@ -182,8 +182,8 @@ homepage text NULL
 readme text NULL
 deprecated boolean NULL
 has_types boolean NULL
-page_id integer FK >0- page.id
-download_page_id integer FK >0- page.id
+page_id integer unique FK >0- page.id
+download_page_id integer unique FK >0- page.id
 dependent_page_id integer FK >0- page.id
 
 
@@ -222,9 +222,9 @@ type enum('prod','dev','peer','optional')
 # verification_code (50, 550)
 # verification_attempt (50, 400)
 # page (76, 1528)
-# programming_language (75, 871)
-# author (597, 1076)
-# domain (986, 1578)
+# programming_language (-312, 1219)
+# author (591, 1080)
+# domain (-245, 1057)
 # repo (73, 1029)
 # keyword (1131, 969)
 # repo_keyword (648, 906)
