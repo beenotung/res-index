@@ -669,6 +669,38 @@ let bugs_parser = or([
       'https://github.com/babel/babel/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22pkg%3A%20core%22+is%3Aopen',
   }),
 ]) as Parser<{ url: string } | { email: string } | string>
+let dependencies_parser = dict({
+  key: string({ sampleValue: 'better-sqlite3' }),
+  value: nullable(
+    or([
+      string({ sampleValue: '^7.1.0' }),
+      object(
+        {
+          version: string(),
+          dependencies: optional(
+            dict({ key: string(), value: object({ version: string() }) }),
+          ),
+        },
+        {
+          sampleValue: {
+            version: '0.6.4',
+            dependencies: {
+              eyes: {
+                version: '0.1.8',
+              },
+              diff: {
+                version: '1.0.4',
+              },
+            } as undefined | Record<string, { version: string }>,
+          },
+        },
+      ),
+    ]) as Parser<
+      | string
+      | { version: string; dependencies?: Record<string, { version: string }> }
+    >,
+  ),
+})
 let published_npm_package_detail_parser = object({
   'name': string(),
   'dist-tags': optional(
@@ -683,34 +715,16 @@ let published_npm_package_detail_parser = object({
       bugs: optional(bugs_parser),
       types: optional(types_parser),
       typings: optional(types_parser),
-      dependencies: optional(
-        dict({
-          key: string({ sampleValue: 'better-sqlite3' }),
-          value: nullable(string({ sampleValue: '^7.1.0' })),
-        }),
-      ),
-      devDependencies: optional(
-        dict({
-          key: string({ sampleValue: 'better-sqlite3' }),
-          value: nullable(string({ sampleValue: '^7.1.0' })),
-        }),
-      ),
+      dependencies: optional(dependencies_parser),
+      devDependencies: optional(dependencies_parser),
       peerDependencies: optional(
         or([
-          dict({
-            key: string({ sampleValue: 'better-sqlite3' }),
-            value: nullable(string({ sampleValue: '^7.1.0' })),
-          }),
+          dependencies_parser,
           // invalid setup in eslint-config-canonical
-          string(),
-        ]) as Parser<Record<string, string | null> | string>,
+          string({ sampleValue: '^6.0.0 || ^7.0.0' }),
+        ]) as Parser<ParseResult<typeof dependencies_parser> | string>,
       ),
-      optionalDependencies: optional(
-        dict({
-          key: string({ sampleValue: 'better-sqlite3' }),
-          value: nullable(string({ sampleValue: '^7.1.0' })),
-        }),
-      ),
+      optionalDependencies: optional(dependencies_parser),
       dist: object({
         fileCount: optional(int({ min: 1 })),
         unpackedSize: optional(int({ min: 1 })),
@@ -1035,15 +1049,13 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     /* dependencies */
     storeDeps('prod', version.dependencies)
     storeDeps('dev', version.devDependencies)
-    if (typeof version.peerDependencies != 'string') {
-      storeDeps('peer', version.peerDependencies)
-    }
+    storeDeps('peer', version.peerDependencies)
     storeDeps('optional', version.optionalDependencies)
     function storeDeps(
       type: NpmPackageDependency['type'],
-      deps: undefined | Record<string, string | null>,
+      deps: undefined | string | ParseResult<typeof dependencies_parser>,
     ) {
-      if (!deps) {
+      if (!deps || typeof deps == 'string') {
         del(proxy.npm_package_dependency, {
           package_id: npm_package_id,
           type,
