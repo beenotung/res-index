@@ -135,6 +135,7 @@ function fix_npm_page_url() {
     let new_page_id = select_by_url.get({ new_url })
     if (new_page_id) {
       update_repo_page_id.run({ new_page_id, old_page_id: page.id })
+      delete proxy.page[page.id]
       continue
     }
     update_page_url.run({ id: page.id, new_url })
