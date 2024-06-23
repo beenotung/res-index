@@ -45,6 +45,9 @@ export function cleanRepoUrl(url: string | null): string | null {
   // e.g. "htts://github.com/sandhawke/webgram-logins"
   url = url.replace(/^htts:\/\//, 'https://')
 
+  // e.g. "htps://github.com/ember-data/ember-data-rfc395-data"
+  url = url.replace(/^htps:\/\//, 'https://')
+
   // e.g. "git://github:terra-money/wallet-provider"
   url = url.replace('/github:', '/github.com:')
   url = url.replace('/gitlab:', '/gitlab.com:')
