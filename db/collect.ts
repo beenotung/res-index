@@ -653,7 +653,8 @@ let homepage_parser = or([
     sampleValue: 'https://github.com/neoswap-ai/neo-swap-npm#readme',
   }),
   array(string()),
-]) as Parser<string | string[]>
+  object({ url: string() }),
+]) as Parser<string | string[] | { url: string }>
 let bugs_parser = or([
   object({
     // e.g. the url is optional in npm_package "neat"
@@ -766,13 +767,14 @@ let packageTimeParser = object({
   ),
 })
 
-function takeString(
-  value: string | string[] | null | undefined,
+function takeUrl(
+  value: string | string[] | { url: string } | null | undefined,
 ): string | undefined {
   if (typeof value == 'string') return value
   if (Array.isArray(value)) {
     return value.find(value => value)
   }
+  if (value && typeof value == 'object' && value.url) return value.url
 }
 
 function takeBugs(
@@ -931,8 +933,8 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     // e.g. "https://github.com/neoswap-ai/neo-swap-npm#readme"
     let homepage =
-      takeString(pkg.homepage) ||
-      versions.map(version => takeString(version.homepage)).find(url => url) ||
+      takeUrl(pkg.homepage) ||
+      versions.map(version => takeUrl(version.homepage)).find(url => url) ||
       null
     if (npm_package.homepage != homepage) npm_package.homepage = homepage
     let homepage_repo = () => {
