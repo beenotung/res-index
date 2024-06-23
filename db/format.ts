@@ -14,6 +14,12 @@ export function cleanRepoUrl(url: string | null): string | null {
       return null
   }
 
+  // skip non-git urls
+  // e.g. "keybase://team/blockades.cobox/cobox-crypto"
+  if(url.startsWith('keybase://')){
+    return null
+  }
+
   // e.g. "//github.com/synedra/astra-setup"
   url = url.replace(/^\/\/github.com\//, 'https://github.com/')
 
