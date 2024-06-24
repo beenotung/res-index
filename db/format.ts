@@ -16,7 +16,7 @@ export function cleanRepoUrl(url: string | null): string | null {
 
   // skip non-git urls
   // e.g. "keybase://team/blockades.cobox/cobox-crypto"
-  if(url.startsWith('keybase://')){
+  if (url.startsWith('keybase://')) {
     return null
   }
 
