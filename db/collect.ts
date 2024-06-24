@@ -860,6 +860,12 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     let publish_time = pkg.time[version_name]?.getTime()
     let version = pkg.versions[version_name]
+    // e.g. npm package "cson-safe" marked "v1.0.5" as latest, but the published version is "1.0.5"
+    if (!publish_time && !version && version_name.startsWith('v')) {
+      version_name = version_name.slice(1)
+      publish_time = pkg.time[version_name]?.getTime()
+      version = pkg.versions[version_name]
+    }
     if (!publish_time || !version)
       throw new Error(
         `failed to find npm package version detail, name: ${npm_package.name}, version: ${version_name}`,
