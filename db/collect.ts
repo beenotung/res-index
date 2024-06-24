@@ -992,6 +992,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       // e.g. "Glimpse/Home"
       repository = null
     }
+    if (repository?.startsWith('//')) {
+      // e.g. "//OpsInsight/Eagle/ui/create-glass-app/"
+      repository = null
+    }
     repository =
       // e.g. "git+htt// Data after initializing the swapps://github.com/neoswap-ai/neo-swap-npm.git"
       (repository?.includes(' ') ? null : repository) ||
