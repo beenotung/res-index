@@ -57,6 +57,9 @@ export function cleanRepoUrl(url: string | null): string | null {
   // e.g. "https:://github.com/angeljunior/instagram-scraper-nodejs"
   url = url.replace(/^https::\/\//, 'https://')
 
+  // e.g. "html://github.com/qiuwenwu/mm_html"
+  url = url.replace(/^html:\/\//, 'https://')
+
   // e.g. "git://github:terra-money/wallet-provider"
   url = url.replace('/github:', '/github.com:')
   url = url.replace('/gitlab:', '/gitlab.com:')
