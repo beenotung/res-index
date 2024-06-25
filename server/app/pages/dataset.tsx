@@ -550,7 +550,7 @@ let sync_npm_package: Sync<NpmPackageExport> = {
 }
 
 async function run_sync<T>(timer: Timer, sync: Sync<T>) {
-  let batch_size = 200
+  let batch_size = 50
 
   let list: ReceivedList = { unchecked: [], checked: [] }
   {
