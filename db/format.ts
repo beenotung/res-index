@@ -46,7 +46,7 @@ export function cleanRepoUrl(url: string | null): string | null {
   url = remove_suffix(url, '.git')
 
   // e.g. "https+git://github.com/pburtchaell/react-notification"
-  url = url.replace(/^https+git:\/\//, 'https://')
+  url = url.replace(/^https\+git:\/\//, 'https://')
 
   // e.g. "hhttps://github.com/RodrigoMattosoSilveira/rms-sparklines"
   url = url.replace(/^hhttps:\/\//, 'https://')
