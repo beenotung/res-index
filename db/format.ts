@@ -57,6 +57,9 @@ export function cleanRepoUrl(url: string | null): string | null {
   // e.g. "htps://github.com/ember-data/ember-data-rfc395-data"
   url = url.replace(/^htps:\/\//, 'https://')
 
+  // e.g. "ttps://github.com/jmaver-plume/kafkajs-msk-iam-authentication-mechanism"
+  url = url.replace(/^ttps:\/\//, 'https://')
+
   // e.g. "https:://github.com/angeljunior/instagram-scraper-nodejs"
   url = url.replace(/^https::\/\//, 'https://')
 
