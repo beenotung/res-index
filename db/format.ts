@@ -144,21 +144,23 @@ export function cleanRepoUrl(url: string | null): string | null {
     return null
   }
 
-  if (!url.startsWith('https://')) {
-    throw new Error('Invalid repository url: ' + url)
-  }
-
   // e.g. "https://www.github.com/DefinitelyTyped/DefinitelyTyped"
   url = url.replace(/^https:\/\/www\./, 'https://')
 
   if (
-    !url.startsWith('https://github.com/') &&
-    !url.startsWith('https://gitlab.com/') &&
-    !url.startsWith('https://gitee.com/') &&
-    !url.startsWith('https://bitbucket.org/')
+    (!url.startsWith('https://github.com/') &&
+      !url.startsWith('https://gitlab.com/') &&
+      !url.startsWith('https://gitee.com/') &&
+      !url.startsWith('https://bitbucket.org/')) ||
+    // e.g. "/Users/David/app/git/yotelopago"
+    url.startsWith('/Users/')
   ) {
     // skip private repo
     return null
+  }
+
+  if (!url.startsWith('https://')) {
+    throw new Error('Invalid repository url: ' + url)
   }
 
   return url
