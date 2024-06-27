@@ -143,6 +143,10 @@ export function cleanRepoUrl(url: string | null): string | null {
   if (!parts[4]) {
     return null
   }
+  // e.g. "https://github.com//acosom"
+  if (url.startsWith('https://github.com//')) {
+    return null
+  }
 
   // e.g. "https://www.github.com/DefinitelyTyped/DefinitelyTyped"
   url = url.replace(/^https:\/\/www\./, 'https://')

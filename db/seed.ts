@@ -291,6 +291,7 @@ select repo.id as repo_id
 from repo
 left join npm_package on npm_package.repo_id = repo.id
 where url like '%@%'
+   or url like 'https://github.com//%'
 `)
   for (let row of rows) {
     let url = cleanRepoUrl(row.repository || row.repo_url)
