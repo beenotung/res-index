@@ -1,7 +1,7 @@
 import { o } from '../jsx/jsx.js'
 import SourceCode from '../components/source-code.js'
 import { mapArray } from '../components/fragment.js'
-import { DynamicContext } from '../context.js'
+import { Context, DynamicContext } from '../context.js'
 import Style from '../components/style.js'
 import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
@@ -12,6 +12,8 @@ import { nodeToVNode } from '../jsx/vnode.js'
 import { Element } from '../jsx/types.js'
 import { newDB } from 'better-sqlite3-schema'
 import { DAY } from '@beenotung/tslib/time.js'
+import { Routes } from '../routes.js'
+import { title } from '../../config.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -99,16 +101,6 @@ function autoHideHints() {
 }
 autoHideHints()
 `)
-
-let content = (
-  <div id="home">
-    {style}
-    <h1>FOSS Git Repository & NPM Package Index</h1>
-    <Page />
-    {script}
-    <SourceCode page="home.tsx" />
-  </div>
-)
 
 type MatchedNpmPackage = {
   name: string
@@ -339,9 +331,8 @@ group by npm_package.id
   }
 }
 
-function Page(attrs: {}, context: DynamicContext) {
-  let params = new URLSearchParams(context.routerMatch?.search)
-  let query = build_search_query(params)
+function Page(attrs: {}, context: SearchContext) {
+  let { params, query } = context
   let { prefix } = query
 
   let matchedItems = db
@@ -764,4 +755,69 @@ if (process.argv[1] == import.meta.filename) {
 // And it can be pre-rendered into html as well
 // let Home = prerender(content)
 
-export default content
+type SearchContext = DynamicContext & {
+  params: URLSearchParams
+  query: ReturnType<typeof build_search_query>
+}
+
+let content = (
+  <div id="home">
+    {style}
+    <h1>FOSS Git Repository & NPM Package Index</h1>
+    <Page />
+    {script}
+    <SourceCode page="home.tsx" />
+  </div>
+)
+
+let routes = {
+  '/': {
+    menuText: 'Search',
+    resolve(context) {
+      let params = new URLSearchParams(context.routerMatch?.search)
+      let query = build_search_query(params)
+
+      let ctx = context as SearchContext
+      ctx.params = params
+      ctx.query = query
+
+      function getTitle() {
+        let acc = ''
+
+        function add(text: string | null): void {
+          if (!text) return
+          if (acc) {
+            acc += ' '
+          }
+          acc += text
+        }
+
+        add(query.desc)
+        add(query.name || (acc ? 'resources' : 'Resources'))
+        if (query.prefix) {
+          add(`(${query.prefix}*)`)
+        }
+        if (query.language) {
+          add('in ' + query.language)
+        }
+        if (query.host) {
+          add('on ' + query.host)
+        }
+        if (query.username) {
+          add('by ' + query.username)
+        }
+
+        return acc.trim()
+      }
+
+      return {
+        title: getTitle() + ' | FOSS Git Repositories & NPM Packages',
+        description:
+          'Getting Started with ts-liveview - a server-side rendering realtime webapp framework with progressive enhancement',
+        node: content,
+      }
+    },
+  },
+} satisfies Routes
+
+export default { routes }
