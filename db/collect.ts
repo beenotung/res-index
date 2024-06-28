@@ -318,8 +318,10 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
     console.log('rate limited?', response?.headers())
   }
   let is_404 = await page.evaluate(() => {
-    return !!document.querySelector(
-      '[alt="404 “This is not the web page you are looking for”"]',
+    return (
+      !!document.querySelector(
+        '[alt="404 “This is not the web page you are looking for”"]',
+      ) || !!document.querySelector('[data-testid="eror-404-description"]')
     )
   })
   if (is_404) {
