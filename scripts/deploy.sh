@@ -53,6 +53,7 @@ else
   rsync -SavLPz \
     db/package.json \
     db/migrations \
+    db/parser \
     db/*.ts \
     "$user@$host:$root_dir/db"
   if [ "$MODE" == "first" ]; then
