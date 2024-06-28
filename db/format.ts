@@ -137,6 +137,9 @@ export function cleanRepoUrl(url: string | null): string | null {
     url = 'https://github.com/' + url
   }
 
+  // e.g. "https://github.com/orgs/privy-io"
+  url = url.replace(/^https:\/\/github.com\/orgs\//, 'https://github.com/')
+
   // skip author page
   // e.g. "https://github.com/textioHQ/"
   let parts = url.split('/')

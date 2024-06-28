@@ -232,6 +232,24 @@ function fix_npm_download() {
 }
 run(fix_npm_download)
 
+function remove_repo_org_page() {
+  let rows = db.query(
+    'select id, url from page where url like ?',
+    'https://github.com/orgs/%',
+  )
+  for (let row of rows) {
+    let page_id = row.id
+    let url = cleanRepoUrl(row.url)
+    if (url != row.url) {
+      let repo_id = find(proxy.repo, { page_id })?.id
+      if (repo_id) {
+        deleteRepo(repo_id)
+      }
+    }
+  }
+}
+run(remove_repo_org_page)
+
 function remove_invalid_repo_url() {
   let rows = db.query<{
     npm_package_id: number
