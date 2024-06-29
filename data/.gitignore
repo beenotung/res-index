@@ -1,6 +1,7 @@
 *.sqlite3*
 session.txt
 visit.txt
+user-agent-version.txt
 *.xz
 *.sqlite3-shm
 *.sqlite3-wal
