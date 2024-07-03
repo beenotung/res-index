@@ -318,7 +318,12 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
     console.log('rate limited?', response?.headers())
   }
   let is_private = await page.evaluate(() => {
-    return location.href.startsWith('https://github.com/login?return_to=')
+    // e.g. "https://github.com/enterprises/salesforce-emu/sso?return_to=https%3A%2F%2Fgithub.com%2Fsalesforce-experience-platform-emu%2Flwr"
+    return (
+      location.href.startsWith('https://github.com/login?return_to=') ||
+      (location.href.startsWith('https://github.com/enterprises/') &&
+        location.href.includes('/sso?return_to='))
+    )
   })
   let is_disabled = await page.evaluate(() => {
     return !!Array.from(document.querySelectorAll('h3')).find(
