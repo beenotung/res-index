@@ -317,6 +317,9 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   if (response?.status() == 429) {
     console.log('rate limited?', response?.headers())
   }
+  let is_private = await page.evaluate(() => {
+    return location.href.startsWith('https://github.com/login?return_to=')
+  })
   let is_disabled = await page.evaluate(() => {
     return !!Array.from(document.querySelectorAll('h3')).find(
       h3 => h3.innerText == 'This repository has been disabled',
@@ -329,7 +332,7 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
       ) || !!document.querySelector('[data-testid="eror-404-description"]')
     )
   })
-  if (is_disabled || is_404) {
+  if (is_private || is_disabled || is_404) {
     let payload = JSON.stringify({ is_disabled, is_404 })
     let now = Date.now()
     db.transaction(() => {
