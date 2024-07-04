@@ -292,6 +292,7 @@ where repo_id = :repo_id
   }
 }
 
+// remove '@' in repo.url
 function fix_repo_url() {
   let rows = db.query<{
     repo_id: number
