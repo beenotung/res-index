@@ -15,6 +15,7 @@ import { find } from 'better-sqlite3-proxy'
 import { EarlyTerminate, toRouteUrl } from '../helpers.js'
 import { binArray } from '@beenotung/tslib/array.js'
 import { Timer, startTimer } from '@beenotung/tslib/timer.js'
+import { later } from '@beenotung/tslib/async/wait.js'
 
 let pageTitle = 'Dataset'
 let addPageTitle = 'Add Dataset'
@@ -572,10 +573,20 @@ async function run_sync<T>(timer: Timer, sync: Sync<T>) {
   timer.setEstimateProgress(n)
   for (let key_batch of batches) {
     let export_batch = key_batch.map(sync.export_one)
-    await post<typeof sync.on_receive_batch>(
-      toRouteUrl(routes, sync.batch_url),
-      { receive_list: export_batch },
-    )
+    for (;;) {
+      try {
+        await post<typeof sync.on_receive_batch>(
+          toRouteUrl(routes, sync.batch_url),
+          { receive_list: export_batch },
+        )
+        break
+      } catch (error) {
+        // retry after some pause
+        console.log(error)
+        await later(5000)
+      }
+    }
+
     timer.tick(key_batch.length)
   }
 }
