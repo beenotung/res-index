@@ -170,6 +170,17 @@ export function cleanRepoUrl(url: string | null): string | null {
     throw new Error('Invalid repository url: ' + url)
   }
 
+  // e.g. "https://github.com/ZupIT/beagle-backend-ts/wiki/CLI"
+  for (;;) {
+    let part = url.split('/').slice(4).join('/')
+    if (part.endsWith('/wiki') || part.includes('/wiki/')) {
+      let index = url.lastIndexOf('/wiki')
+      url = url.substring(0, index)
+      continue
+    }
+    break
+  }
+
   return url
 }
 
