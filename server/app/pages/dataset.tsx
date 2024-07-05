@@ -440,13 +440,8 @@ function on_receive_npm_package_batch(input: {
   })()
 }
 
-async function post<Fn extends (input: any) => any>(
-  url: string,
-  body: Parameters<Fn>[0],
-): Promise<ReturnType<Fn>> {
-  let remote_origin = 'https://res-index.hkit.cc'
-  // let remote_origin = 'http://localhost:8520'
-  let res = await fetch(remote_origin + url, {
+async function post_once(url: string, body: object) {
+  let res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -454,7 +449,14 @@ async function post<Fn extends (input: any) => any>(
     },
     body: JSON.stringify(body),
   })
-  let text = await res.text()
+  let text: string
+  try {
+    text = await res.text()
+  } catch (error) {
+    console.log('Network failure when POST ' + url)
+    console.log(error)
+    throw error
+  }
   try {
     let json = JSON.parse(text)
     if (json.error) {
@@ -468,6 +470,22 @@ async function post<Fn extends (input: any) => any>(
     console.log(text)
     console.log()
     throw error
+  }
+}
+
+async function post<Fn extends (input: any) => any>(
+  url: string,
+  body: Parameters<Fn>[0],
+): Promise<ReturnType<Fn>> {
+  let remote_origin = 'https://res-index.hkit.cc'
+  // let remote_origin = 'http://localhost:8520'
+  for (;;) {
+    try {
+      return await post_once(remote_origin + url, body)
+    } catch (error) {
+      // retry after some pause
+      await later(5000)
+    }
   }
 }
 
@@ -573,20 +591,10 @@ async function run_sync<T>(timer: Timer, sync: Sync<T>) {
   timer.setEstimateProgress(n)
   for (let key_batch of batches) {
     let export_batch = key_batch.map(sync.export_one)
-    for (;;) {
-      try {
-        await post<typeof sync.on_receive_batch>(
-          toRouteUrl(routes, sync.batch_url),
-          { receive_list: export_batch },
-        )
-        break
-      } catch (error) {
-        // retry after some pause
-        console.log(error)
-        await later(5000)
-      }
-    }
-
+    await post<typeof sync.on_receive_batch>(
+      toRouteUrl(routes, sync.batch_url),
+      { receive_list: export_batch },
+    )
     timer.tick(key_batch.length)
   }
 }
