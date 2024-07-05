@@ -22,6 +22,8 @@ while [ true ]; do
   sqlite3 slim.sqlite3 'update page set payload = null where id in (select id from page where payload is not null limit 2000)'
 done
 sqlite3 slim.sqlite3 '.dump' > slim.sql
+rm slim.sqlite3
 du -sh slim.sql
 cat slim.sql | xz - > db.sql.xz
+rm slim.sql
 du -sh db.sql.xz
