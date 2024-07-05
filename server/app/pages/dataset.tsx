@@ -11,7 +11,7 @@ import {
   proxy,
 } from '../../../db/proxy.js'
 import { db } from '../../../db/db.js'
-import { find } from 'better-sqlite3-proxy'
+import { find, clearCache } from 'better-sqlite3-proxy'
 import { EarlyTerminate, toRouteUrl } from '../helpers.js'
 import { binArray } from '@beenotung/tslib/array.js'
 import { Timer, startTimer } from '@beenotung/tslib/timer.js'
@@ -543,6 +543,7 @@ function brideToFn<Fn extends (input: any) => any>(
   }
   let json = fn(context.req.body)
   context.res.json(json)
+  clearCache(proxy)
   throw EarlyTerminate
 }
 
