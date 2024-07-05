@@ -181,6 +181,14 @@ export function cleanRepoUrl(url: string | null): string | null {
     break
   }
 
+  // e.g. "https://github.com/MOACChain/chain3/releases"
+  {
+    let parts = url.split('/')
+    if (parts.length > 5 && parts.pop() == 'releases') {
+      url = parts.join('/')
+    }
+  }
+
   return url
 }
 
