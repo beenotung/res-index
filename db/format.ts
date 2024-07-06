@@ -182,9 +182,11 @@ export function cleanRepoUrl(url: string | null): string | null {
   }
 
   // e.g. "https://github.com/MOACChain/chain3/releases"
+  // e.g. "https://github.com/mozilla/eslint-plugin-no-unsanitized/issues"
   {
     let parts = url.split('/')
-    if (parts.length > 5 && parts.pop() == 'releases') {
+    let last = parts.pop()
+    if (parts.length >= 5 && (last == 'releases' || last == 'issues')) {
       url = parts.join('/')
     }
   }
