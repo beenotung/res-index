@@ -73,12 +73,14 @@ order by page.id asc
 async function collectPendingPages(page: GracefulPage) {
   let timer = startTimer('collect pending pages')
   let dependent_rate_limited = false
+  let github_rate_limited = false
   for (;;) {
     let pages = select_pending_page.all()
     if (pages.length == 0) break
-    if (dependent_rate_limited) {
+    if (dependent_rate_limited || github_rate_limited) {
       await later(5000)
       dependent_rate_limited = false
+      github_rate_limited = false
     }
     pages.sort((a, b) => {
       // check for repo
@@ -109,7 +111,11 @@ async function collectPendingPages(page: GracefulPage) {
         let repo = find(proxy.repo, { page_id: id! })
         if (!repo)
           throw new Error('failed to find repository from page, url: ' + url)
-        await collectGithubRepoDetails(page, repo)
+        if (github_rate_limited) continue
+        let res = await collectGithubRepoDetails(page, repo)
+        if (res == 'rate limited') {
+          github_rate_limited = true
+        }
       } else if (
         // e.g. "https://registry.npmjs.org/@beenotung/tslib"
         url.startsWith('https://registry.npmjs.org/')
@@ -315,7 +321,7 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"
   let response = await page.goto(repo.url)
   if (response?.status() == 429) {
-    console.log('rate limited?', response?.headers())
+    return 'rate limited' as const
   }
   let is_private = await page.evaluate(() => {
     // e.g. "https://github.com/enterprises/salesforce-emu/sso?return_to=https%3A%2F%2Fgithub.com%2Fsalesforce-experience-platform-emu%2Flwr"
