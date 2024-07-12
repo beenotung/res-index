@@ -531,13 +531,12 @@ where url like 'https://github.com/%/%/%'
     let repo = proxy.repo[row.repo_id]
 
     /* unlink foreign key references */
-    let npm_package = find(proxy.npm_package, { repo_id: repo?.id })
-    if (npm_package) {
+    let npm_packages = filter(proxy.npm_package, { repo_id: repo.id })
+    for (let npm_package of npm_packages) {
       npm_package.repo_id = null
     }
-    if (repo) {
-      delete proxy.repo[repo.id!]
-    }
+    del(proxy.repo_keyword, { repo_id: repo.id! })
+    delete proxy.repo[repo.id!]
 
     /* delete page */
     delete proxy.page[row.page_id]
@@ -547,7 +546,7 @@ where url like 'https://github.com/%/%/%'
     repo = storeRepo(url)
 
     /* restore version foreign key references */
-    if (npm_package) {
+    for (let npm_package of npm_packages) {
       npm_package.repo_id = repo.id!
     }
   }

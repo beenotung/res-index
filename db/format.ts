@@ -181,14 +181,28 @@ export function cleanRepoUrl(url: string | null): string | null {
   }
 
   if (url.startsWith('https://github.com/')) {
-    // e.g. "https://github.com/myntra/applique-ui/tree/release/packages/@myntra/eslint-config-standard"
-    // e.g. "https://github.com/MOACChain/chain3/releases"
-    // e.g. "https://github.com/mozilla/eslint-plugin-no-unsanitized/issues"
-    // e.g. "https://github.com/ZupIT/beagle-backend-ts/wiki/CLI"
-    // e.g. "https://github.com/pyth-network/pyth-js/pyth-common-js"
     let parts = url.split('/')
-    if (parts.length >= 6) {
-      url = parts.slice(0, 5).join('/')
+    let type = parts[5]
+    switch (type) {
+      case undefined:
+        break
+      // e.g. "https://github.com/myntra/applique-ui/tree/release/packages/@myntra/eslint-config-standard"
+      case 'tree':
+      // e.g. "https://github.com/MOACChain/chain3/releases"
+      case 'releases':
+      // e.g. "https://github.com/mozilla/eslint-plugin-no-unsanitized/issues"
+      case 'issues':
+      // e.g. "https://github.com/hagevvashi/twsh/issue"
+      case 'issue':
+      // e.g. "https://github.com/ZupIT/beagle-backend-ts/wiki/CLI"
+      case 'wiki':
+      // e.g. "https://github.com/DSMNET/DSMNET/"
+      case '':
+        url = parts.slice(0, 5).join('/')
+        break
+      default:
+        // e.g. "https://github.com/pyth-network/pyth-js/pyth-common-js"
+        throw new Error(`Unexpected github repo url: ${url}`)
     }
   }
 
