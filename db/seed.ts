@@ -6,7 +6,12 @@ import { readdirSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
-import { hasTypes, npm_package_detail_parser, storeNpmPackage } from './collect'
+import {
+  hasTypes,
+  npm_package_detail_parser,
+  storeNpmPackage,
+  storeRepo,
+} from './collect'
 import { getLanguageId } from './store'
 import { env } from './env'
 
@@ -293,6 +298,7 @@ where repo_id = :repo_id
 }
 
 // remove '@' in repo.url
+// remove extra '/' after origin in repo.url
 function fix_repo_url() {
   let rows = db.query<{
     repo_id: number
@@ -515,3 +521,42 @@ where name like '../%'
   }
 }
 run(fix_relative_npm_package_name)
+
+// remove '/wiki' part in repo.url
+function remove_wiki_page() {
+  let rows = db
+    .prepare<void[], { id: number; url: string }>(
+      /* sql */ `
+select id, url from page where url like 'https://github.com/%/wiki%'
+`,
+    )
+    .all()
+  for (let row of rows) {
+    let url = cleanRepoUrl(row.url)
+    if (url == row.url) continue
+
+    let repo = find(proxy.repo, { page_id: row.id })
+
+    /* unlink foreign key references */
+    let npm_package = find(proxy.npm_package, { repo_id: repo?.id })
+    if (npm_package) {
+      npm_package.repo_id = null
+    }
+    if (repo) {
+      delete proxy.repo[repo.id!]
+    }
+
+    /* delete page */
+    delete proxy.page[row.id]
+    if (!url) continue
+
+    /* store corrected repo url */
+    repo = storeRepo(url)
+
+    /* restore version foreign key references */
+    if (npm_package) {
+      npm_package.repo_id = repo.id!
+    }
+  }
+}
+run(remove_wiki_page)

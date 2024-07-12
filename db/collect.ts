@@ -1029,33 +1029,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       npm_package.repository = repository
 
     if (repo_url) {
-      let {
-        host: repo_host,
-        username: repo_username,
-        name: repo_name,
-      } = parseRepoUrl(repo_url)
-
-      let repo = find(proxy.repo, { url: repo_url })
-      if (!repo) {
-        let repo_id = proxy.repo.push({
-          domain_id: getId(proxy.domain, 'host', repo_host),
-          author_id: getId(proxy.author, 'username', repo_username),
-          name: repo_name,
-          is_fork: null,
-          url: repo_url,
-          desc: null,
-          programming_language_id: null,
-          website: null,
-          stars: null,
-          watchers: null,
-          forks: null,
-          readme: null,
-          last_commit: null,
-          is_public: null,
-          page_id: getId(proxy.page, 'url', repo_url),
-        })
-        repo = proxy.repo[repo_id]
-      }
+      let repo = storeRepo(repo_url)
       if (repo.id != npm_package.repo_id) {
         npm_package.repo_id = repo.id!
       }
@@ -1126,6 +1100,37 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       }
     }
   })()
+}
+
+export function storeRepo(repo_url: string) {
+  let {
+    host: repo_host,
+    username: repo_username,
+    name: repo_name,
+  } = parseRepoUrl(repo_url)
+
+  let repo = find(proxy.repo, { url: repo_url })
+  if (!repo) {
+    let repo_id = proxy.repo.push({
+      domain_id: getId(proxy.domain, 'host', repo_host),
+      author_id: getId(proxy.author, 'username', repo_username),
+      name: repo_name,
+      is_fork: null,
+      url: repo_url,
+      desc: null,
+      programming_language_id: null,
+      website: null,
+      stars: null,
+      watchers: null,
+      forks: null,
+      readme: null,
+      last_commit: null,
+      is_public: null,
+      page_id: getId(proxy.page, 'url', repo_url),
+    })
+    repo = proxy.repo[repo_id]
+  }
+  return repo
 }
 
 async function collectNpmPackageDependents(page: GracefulPage, name: string) {
