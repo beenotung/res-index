@@ -523,11 +523,27 @@ where name like '../%'
 run(fix_relative_npm_package_name)
 
 // remove '/wiki' part in repo.url
-function remove_wiki_page() {
+// remove '/releases' part in repo.url
+// remove '/issues' part in repo.url
+function remove_repo_url_suffix() {
   let rows = db
-    .prepare<void[], { id: number; url: string }>(
+    .prepare<
+      void[],
+      {
+        repo_id: number
+        page_id: number
+        url: string
+      }
+    >(
       /* sql */ `
-select id, url from page where url like 'https://github.com/%/wiki%'
+select
+  id as repo_url
+, page_id
+, url
+from repo
+where url like 'https://github.com/%/wiki%'
+   or url like 'https://github.com/%/releases%'
+   or url like 'https://github.com/%/issues%'
 `,
     )
     .all()
@@ -535,7 +551,7 @@ select id, url from page where url like 'https://github.com/%/wiki%'
     let url = cleanRepoUrl(row.url)
     if (url == row.url) continue
 
-    let repo = find(proxy.repo, { page_id: row.id })
+    let repo = proxy.repo[row.repo_id]
 
     /* unlink foreign key references */
     let npm_package = find(proxy.npm_package, { repo_id: repo?.id })
@@ -547,7 +563,7 @@ select id, url from page where url like 'https://github.com/%/wiki%'
     }
 
     /* delete page */
-    delete proxy.page[row.id]
+    delete proxy.page[row.page_id]
     if (!url) continue
 
     /* store corrected repo url */
@@ -559,4 +575,4 @@ select id, url from page where url like 'https://github.com/%/wiki%'
     }
   }
 }
-run(remove_wiki_page)
+run(remove_repo_url_suffix)
