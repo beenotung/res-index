@@ -255,30 +255,6 @@ function remove_repo_org_page() {
 }
 run(remove_repo_org_page)
 
-function remove_invalid_repo_url() {
-  let rows = db.query<{
-    npm_package_id: number
-    repo_id: number
-    page_id: number
-    repo_url: string
-  }>(/* sql */ `
-    select
-      npm_package.id as npm_package_id
-    , repo.id as repo_id
-    , repo.page_id as page_id
-    , repo.url as repo_url
-    from npm_package
-    inner join repo on repo.id = npm_package.repo_id
-    `)
-  for (let row of rows) {
-    let url = cleanRepoUrl(row.repo_url)
-    if (!url || url != row.repo_url) {
-      deleteRepo(row.repo_id)
-    }
-  }
-}
-run(remove_invalid_repo_url)
-
 function deleteRepo(repo_id: number) {
   if (!(repo_id in proxy.repo)) {
     return
@@ -522,9 +498,12 @@ where name like '../%'
 }
 run(fix_relative_npm_package_name)
 
-// remove '/wiki' part in repo.url
-// remove '/releases' part in repo.url
-// remove '/issues' part in repo.url
+// Remove extra parts in repo.url
+// For example:
+// - '/wiki'
+// - '/releases'
+// - '/issues'
+// - '/tree'
 function remove_repo_url_suffix() {
   let rows = db
     .prepare<
@@ -541,9 +520,7 @@ select
 , page_id
 , url
 from repo
-where url like 'https://github.com/%/wiki%'
-   or url like 'https://github.com/%/releases%'
-   or url like 'https://github.com/%/issues%'
+where url like 'https://github.com/%/%/%'
 `,
     )
     .all()

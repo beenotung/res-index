@@ -185,18 +185,10 @@ export function cleanRepoUrl(url: string | null): string | null {
     // e.g. "https://github.com/MOACChain/chain3/releases"
     // e.g. "https://github.com/mozilla/eslint-plugin-no-unsanitized/issues"
     // e.g. "https://github.com/ZupIT/beagle-backend-ts/wiki/CLI"
+    // e.g. "https://github.com/pyth-network/pyth-js/pyth-common-js"
     let parts = url.split('/')
-    let type = parts[5]
-    switch (type) {
-      case 'tree':
-      case 'releases':
-      case 'issues':
-      case 'wiki':
-        url = parts.slice(0, 5).join('/')
-        break
-      default:
-        if (!type) break
-        throw new Error(`Unexpected repository type: ${type}, url: ${url}`)
+    if (parts.length >= 6) {
+      url = parts.slice(0, 5).join('/')
     }
   }
 
