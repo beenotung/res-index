@@ -1,6 +1,6 @@
 import { isIP } from '@beenotung/tslib/url'
 import { proxy } from './proxy'
-import { filter, notNull } from 'better-sqlite3-proxy'
+import { filter, find, notNull } from 'better-sqlite3-proxy'
 
 export function cleanRepoUrl(url: string | null): string | null {
   url = url ? url.trim() : url
@@ -43,7 +43,6 @@ export function cleanRepoUrl(url: string | null): string | null {
 
   // e.g. "git+https://github.com/beenotung/tslib.git"
   url = remove_prefix(url, 'git+')
-  url = remove_suffix(url, '.git')
 
   // e.g. "https+git://github.com/pburtchaell/react-notification"
   url = url.replace(/^https\+git:\/\//, 'https://')
@@ -176,16 +175,6 @@ export function cleanRepoUrl(url: string | null): string | null {
     throw new Error('Invalid repository url: ' + url)
   }
 
-  for (;;) {
-    let part = url.split('/').slice(4).join('/')
-    if (part.endsWith('/wiki') || part.includes('/wiki/')) {
-      let index = url.lastIndexOf('/wiki')
-      url = url.substring(0, index)
-      continue
-    }
-    break
-  }
-
   if (url.startsWith('https://github.com/')) {
     let parts = url.split('/')
     let type = parts[5]
@@ -202,17 +191,48 @@ export function cleanRepoUrl(url: string | null): string | null {
       case 'issue':
       // e.g. "https://github.com/ZupIT/beagle-backend-ts/wiki/CLI"
       case 'wiki':
+      // e.g. "https://github.com/pnpm/pnpm/blob/main/fs/graceful-fs"
+      case 'blob':
       // e.g. "https://github.com/DSMNET/DSMNET/"
       case '':
         url = parts.slice(0, 5).join('/')
         break
       default:
+        // e.g. "https://github.com/RajaRj25/NewProject.git/react-native-awesome-module"
+        if (parts[4].endsWith('.git')) {
+          url = parts.slice(0, 5).join('/')
+          break
+        }
+
         // e.g. "https://github.com/pyth-network/pyth-js/pyth-common-js"
+        if (isKnownUsername(parseRepoUrl(url).username)) {
+          url = parts.slice(0, 5).join('/')
+          break
+        }
+
         throw new Error(`Unexpected github repo url: ${url}`)
     }
   }
 
+  // e.g. "https://github.com/citelab/JAM.git"
+  url = remove_suffix(url, '.git')
+
   return url
+}
+
+let known_bad_url_usernames = new Set(
+  [
+    'https://github.com/pyth-network/pyth-js/pyth-common-js',
+    'https://github.com/juicyllama/framework/common/dev',
+    'https://github.com/mir8bloxx/cross.audio.engine/react-native-native-audio-engine',
+    'https://github.com/liferay/liferay-themes-sdk/packages/liferay-theme-finder',
+  ].map(url => parseRepoUrl(url).username),
+)
+
+function isKnownUsername(username: string): boolean {
+  if (known_bad_url_usernames.has(username)) return true
+  if (find(proxy.author, { username })) return true
+  return false
 }
 
 export function parseRepoUrl(url: string) {
