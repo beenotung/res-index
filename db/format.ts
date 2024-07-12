@@ -170,7 +170,6 @@ export function cleanRepoUrl(url: string | null): string | null {
     throw new Error('Invalid repository url: ' + url)
   }
 
-  // e.g. "https://github.com/ZupIT/beagle-backend-ts/wiki/CLI"
   for (;;) {
     let part = url.split('/').slice(4).join('/')
     if (part.endsWith('/wiki') || part.includes('/wiki/')) {
@@ -181,13 +180,23 @@ export function cleanRepoUrl(url: string | null): string | null {
     break
   }
 
-  // e.g. "https://github.com/MOACChain/chain3/releases"
-  // e.g. "https://github.com/mozilla/eslint-plugin-no-unsanitized/issues"
-  {
+  if (url.startsWith('https://github.com/')) {
+    // e.g. "https://github.com/myntra/applique-ui/tree/release/packages/@myntra/eslint-config-standard"
+    // e.g. "https://github.com/MOACChain/chain3/releases"
+    // e.g. "https://github.com/mozilla/eslint-plugin-no-unsanitized/issues"
+    // e.g. "https://github.com/ZupIT/beagle-backend-ts/wiki/CLI"
     let parts = url.split('/')
-    let last = parts.pop()
-    if (parts.length >= 5 && (last == 'releases' || last == 'issues')) {
-      url = parts.join('/')
+    let type = parts[5]
+    switch (type) {
+      case 'tree':
+      case 'releases':
+      case 'issues':
+      case 'wiki':
+        url = parts.slice(0, 5).join('/')
+        break
+      default:
+        if (!type) break
+        throw new Error(`Unexpected repository type: ${type}, url: ${url}`)
     }
   }
 
