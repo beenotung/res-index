@@ -537,7 +537,7 @@ function remove_repo_url_suffix() {
     >(
       /* sql */ `
 select
-  id as repo_url
+  id as repo_id
 , page_id
 , url
 from repo
