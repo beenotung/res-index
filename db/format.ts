@@ -154,6 +154,12 @@ export function cleanRepoUrl(url: string | null): string | null {
   // e.g. "https://www.github.com/DefinitelyTyped/DefinitelyTyped"
   url = url.replace(/^https:\/\/www\./, 'https://')
 
+  // e.g. "https://github.com/github.com/Akryum/guijs"
+  url = url.replace(
+    /^https:\/\/github.com\/github.com\//,
+    'https://github.com/',
+  )
+
   if (
     (!url.startsWith('https://github.com/') &&
       !url.startsWith('https://gitlab.com/') &&
