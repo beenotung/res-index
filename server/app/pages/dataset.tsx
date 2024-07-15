@@ -608,6 +608,31 @@ async function sync_with_remote() {
   timer.end()
 }
 
+async function sync_with_remote_v2() {
+  function delete_removed_data() {
+    // 1. local send all id to server
+    // 2. server select all id
+    // 3. find extra ids in server, delete them and their foreign key references
+  }
+  function upload_updated_data() {
+    // 1. local send all id and last update time
+    // 2. server select all id and last update time
+    // 3. server respond updated ids
+    // 4. local send updated rows
+  }
+  function upload_new_data() {
+    // 1. local send all id to server
+    // 2. server select all id
+    // 3. server response missing ids
+    // 4. local send new rows
+  }
+
+  /* main flow */
+  delete_removed_data()
+  upload_updated_data()
+  upload_new_data()
+}
+
 if (import.meta.filename == process.argv[1]) {
   await sync_with_remote()
 }
