@@ -615,10 +615,8 @@ async function sync_with_remote_v2() {
     // 3. find extra ids in server, delete them and their foreign key references
   }
   function upload_updated_data() {
-    // 1. local send all id and last update time
-    // 2. server select all id and last update time
-    // 3. server respond updated ids
-    // 4. local send updated rows
+    // 1. server response max updated_at
+    // 2. local select rows with updated_at >= server's max value
   }
   function upload_new_data() {
     // 1. local send all id to server
