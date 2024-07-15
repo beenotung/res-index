@@ -195,6 +195,8 @@ export function cleanRepoUrl(url: string | null): string | null {
       case 'blob':
       // e.g. "https://github.com/DSMNET/DSMNET/"
       case '':
+      // e.g. "https://github.com/redux-things/redux-actions-assertions/t"
+      case 't':
         url = parts.slice(0, 5).join('/')
         break
       default:
