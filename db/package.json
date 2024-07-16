@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@beenotung/tslib": "^23.6.0",
-    "better-sqlite3-proxy": "^2.7.1",
+    "better-sqlite3-proxy": "^2.9.0",
     "better-sqlite3-schema": "^3.1.4",
     "cast.ts": "^1.14.0",
     "graceful-playwright": "^1.1.9",

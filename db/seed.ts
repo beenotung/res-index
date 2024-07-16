@@ -552,3 +552,92 @@ where url like 'https://github.com/%/%/%'
   }
 }
 run(remove_repo_url_suffix)
+
+function deleteNpmPackage(npm_package_id: number) {
+  db.transaction(() => {
+    let npm_package = proxy.npm_package[npm_package_id]
+    if (npm_package.repo_id) {
+      deleteRepo(npm_package.repo_id)
+    }
+    let { page_id, download_page_id, dependent_page_id } = npm_package
+    delete proxy.npm_package[npm_package_id]
+    delete proxy.page[page_id]
+    delete proxy.page[download_page_id]
+    delete proxy.page[dependent_page_id]
+  })()
+}
+
+function fix_npm_registry_url() {
+  // component is an old package manager (you can do component install lib-name)
+  // e.g. "component/assert" -> "assert"
+  let id_list = db
+    .prepare(
+      /* sql */ `
+select id from npm_package where name like 'component/%'
+`,
+    )
+    .pluck()
+    .all() as number[]
+  for (let npm_package_id of id_list) {
+    let npm_package = proxy.npm_package[npm_package_id]
+
+    // check for name clash
+    let renamed_npm_package = find(proxy.npm_package, {
+      name: npm_package.name.replace('component/', ''),
+    })
+    if (renamed_npm_package) {
+      console.log('del', npm_package_id)
+      update(
+        proxy.npm_package_dependency,
+        { dependency_id: npm_package_id },
+        { dependency_id: renamed_npm_package.id! },
+      )
+      update(
+        proxy.npm_package_dependency,
+        { package_id: npm_package_id },
+        { package_id: renamed_npm_package.id! },
+      )
+      deleteNpmPackage(npm_package_id)
+      continue
+    }
+    console.log('rename', npm_package_id)
+
+    // e.g. "component/assert"
+    npm_package.name = checked_replace(npm_package.name, 'component/', '')
+
+    let page = npm_package.page!
+    // e.g. "https://registry.npmjs.org/component/assert"
+    page.url = checked_replace(
+      page.url,
+      'https://registry.npmjs.org/component/',
+      'https://registry.npmjs.org/',
+    )
+    page.check_time = null
+
+    page = npm_package.download_page!
+    // e.g. "https://api.npmjs.org/downloads/point/last-week/component/assert"
+    page.url = checked_replace(
+      page.url,
+      'https://api.npmjs.org/downloads/point/last-week/component/',
+      'https://api.npmjs.org/downloads/point/last-week/',
+    )
+    page.check_time = null
+
+    page = npm_package.dependent_page!
+    // e.g. "https://www.npmjs.com/browse/depended/component/assert?offset=0"
+    page.url = checked_replace(
+      page.url,
+      'https://www.npmjs.com/browse/depended/component/',
+      'https://www.npmjs.com/browse/depended/',
+    )
+    page.check_time = null
+  }
+}
+run(fix_npm_registry_url)
+
+function checked_replace(text: string, pattern: string, into: string) {
+  if (text.includes(pattern)) {
+    return text.replace(pattern, into)
+  }
+  throw new Error(`Failed to find pattern "${pattern}" in text "${text}"`)
+}
