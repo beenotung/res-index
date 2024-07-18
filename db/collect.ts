@@ -727,7 +727,7 @@ let published_npm_package_detail_parser = object({
   'name': string(),
   'dist-tags': optional(
     object({
-      latest: string(),
+      latest: optional(string()),
     }),
   ),
   'versions': dict({
@@ -874,15 +874,18 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       return
     }
     if (!version_name) {
-      throw new Error(
-        `no latest version specified, npm package name: ${npm_package.name}`,
+      // e.g. npm package "eslint-jsx"
+      console.log(
+        '[Incomplete] no latest version specified, npm package:',
+        npm_package.name,
       )
+      // return
     }
 
-    let publish_time = pkg.time[version_name]?.getTime()
-    let version = pkg.versions[version_name]
+    let publish_time = version_name ? pkg.time[version_name]?.getTime() : null
+    let version = version_name ? pkg.versions[version_name] : null
     // e.g. npm package "cson-safe" marked "v1.0.5" as latest, but the published version is "1.0.5"
-    if (!publish_time && !version && version_name.startsWith('v')) {
+    if (!publish_time && !version && version_name?.startsWith('v')) {
       version_name = version_name.slice(1)
       publish_time = pkg.time[version_name]?.getTime()
       version = pkg.versions[version_name]
@@ -904,7 +907,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     if (npm_package.has_types != has_types) npm_package.has_types = has_types
 
     function findAuthor() {
-      if (version._npmUser?.name) {
+      if (version?._npmUser?.name) {
         return version._npmUser.name
       }
       for (let time of timeList) {
@@ -919,13 +922,14 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     let author_id = author ? getId(proxy.author, 'username', author) : null
     if (npm_package.author_id !== author_id) npm_package.author_id = author_id
 
-    if (npm_package.version != version_name) npm_package.version = version_name
+    if (npm_package.version != version_name)
+      npm_package.version = version_name || null
 
     if (npm_package.last_publish_time != publish_time)
       npm_package.last_publish_time = publish_time
 
     function findUnpackedSize() {
-      if (version.dist.unpackedSize) {
+      if (version?.dist.unpackedSize) {
         return version.dist.unpackedSize
       }
       for (let time of timeList) {
