@@ -875,10 +875,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     }
     if (!version_name) {
       // e.g. npm package "eslint-jsx"
-      console.log(
-        '[Incomplete] no latest version specified, npm package:',
-        npm_package.name,
-      )
+      // console.log(
+      //   '[Incomplete] no latest version specified, npm package:',
+      //   npm_package.name,
+      // )
       // return
     }
 
@@ -890,20 +890,23 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
       publish_time = pkg.time[version_name]?.getTime()
       version = pkg.versions[version_name]
     }
-    if (!publish_time || !version)
-      throw new Error(
-        `failed to find npm package version detail, name: ${npm_package.name}, version: ${version_name}`,
-      )
+    if (!publish_time || !version) {
+      // throw new Error(
+      //   `failed to find npm package version detail, name: ${npm_package.name}, version: ${version_name}`,
+      // )
+    }
 
     let create_time = packageTime.created?.getTime() || null
     if (npm_package.create_time != create_time)
       npm_package.create_time = create_time
 
-    let deprecated = 'deprecated' in version && version.deprecated != false
+    let deprecated =
+      version && 'deprecated' in version && version.deprecated != false
     if (npm_package.deprecated != deprecated)
       npm_package.deprecated = deprecated
 
-    let has_types = hasTypes(version.types) || hasTypes(version.typings)
+    let has_types =
+      version && (hasTypes(version.types) || hasTypes(version.typings))
     if (npm_package.has_types != has_types) npm_package.has_types = has_types
 
     function findAuthor() {
@@ -1058,10 +1061,12 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     }
 
     /* dependencies */
-    storeDeps('prod', version.dependencies)
-    storeDeps('dev', version.devDependencies)
-    storeDeps('peer', version.peerDependencies)
-    storeDeps('optional', version.optionalDependencies)
+    if (version) {
+      storeDeps('prod', version.dependencies)
+      storeDeps('dev', version.devDependencies)
+      storeDeps('peer', version.peerDependencies)
+      storeDeps('optional', version.optionalDependencies)
+    }
     function storeDeps(
       type: NpmPackageDependency['type'],
       deps: undefined | string | ParseResult<typeof dependencies_parser>,
