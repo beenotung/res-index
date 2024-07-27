@@ -3,8 +3,12 @@ import { proxy } from './proxy'
 import { filter, find, notNull } from 'better-sqlite3-proxy'
 
 export function cleanRepoUrl(url: string | null): string | null {
-  url = url ? url.trim() : url
-  if (!url || url.length <= 1) return null
+  if (!url) return null
+
+  url = remove_suffix(url, ')')
+
+  url = url.trim()
+  if (url.length <= 1) return null
 
   switch (url) {
     case 'TBC':

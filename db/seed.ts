@@ -641,3 +641,22 @@ function checked_replace(text: string, pattern: string, into: string) {
   }
   throw new Error(`Failed to find pattern "${pattern}" in text "${text}"`)
 }
+
+function remove_bracket_in_repo() {
+  let ids = db
+    .prepare<void[], number>(
+      /* sql */ `
+  select id from repo where name like '%)'
+  `,
+    )
+    .pluck()
+    .all()
+  for (let id of ids) {
+    let repo = proxy.repo[id]
+    repo.name = repo.name.replace(/\)$/, '').replace(/\.git$/, '')
+    repo.url = repo.url.replace(/\)$/, '').replace(/\.git$/, '')
+    let page = repo.page!
+    page.url = page.url.replace(/\)$/, '').replace(/\.git$/, '')
+  }
+}
+run(remove_bracket_in_repo)
