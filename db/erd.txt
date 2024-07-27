@@ -184,7 +184,7 @@ deprecated boolean NULL
 has_types boolean NULL
 page_id integer unique FK >0- page.id
 download_page_id integer unique FK >0- page.id
-dependent_page_id integer FK >0- page.id
+dependent_page_id integer unique FK >0- page.id
 
 
 npm_package_keyword

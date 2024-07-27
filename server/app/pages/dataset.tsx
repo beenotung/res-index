@@ -61,13 +61,11 @@ where page.check_time is not null
 let count_checked_npm_package = db
   .prepare<void[], number>(
     /* sql */ `
+with checked_page as (select id from page where check_time is not null)
 select count(*) from npm_package
-inner join page as npm_page on npm_page.id = npm_package.page_id
-inner join page as download_page on download_page.id = npm_package.download_page_id
-inner join page as dependent_page on dependent_page.id = npm_package.dependent_page_id
-where npm_page.check_time is not null
-  and download_page.check_time is not null
-  and dependent_page.check_time is not null
+where npm_package.page_id in (select id from checked_page)
+  and npm_package.download_page_id in (select id from checked_page)
+  and npm_package.dependent_page_id in (select id from checked_page)
 `,
   )
   .pluck()
