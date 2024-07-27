@@ -1,4 +1,3 @@
-import { isIP } from '@beenotung/tslib/url'
 import { proxy } from './proxy'
 import { filter, find, notNull } from 'better-sqlite3-proxy'
 
