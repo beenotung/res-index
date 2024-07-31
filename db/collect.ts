@@ -36,7 +36,7 @@ import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
 // TODO continues updates each pages
 
 async function main() {
-  let browser = await chromium.launch({ headless: false })
+  let browser = await chromium.launch({ headless: true })
   let page = new GracefulPage({ from: browser })
   if (proxy.repo.length == 0) {
     await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
