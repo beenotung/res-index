@@ -367,9 +367,9 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
     }
   })
   if (!is_empty) {
-    await (
-      await page.getPage()
-    ).waitForSelector('[data-testid="latest-commit-details"] relative-time')
+    await page.waitForSelector(
+      '[data-testid="latest-commit-details"] relative-time',
+    )
   }
   let res = await page.evaluate(() => {
     let p = document.querySelector<HTMLParagraphElement>('.Layout-sidebar h2+p')

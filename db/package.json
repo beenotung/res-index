@@ -22,7 +22,7 @@
     "better-sqlite3-proxy": "^2.9.0",
     "better-sqlite3-schema": "^3.1.4",
     "cast.ts": "^1.14.0",
-    "graceful-playwright": "^1.1.9",
+    "graceful-playwright": "^1.2.0",
     "knex": "^3.1.0",
     "playwright": "^1.45.0",
     "populate-env": "^2.1.0"
