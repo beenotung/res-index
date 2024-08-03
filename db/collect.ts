@@ -343,8 +343,18 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
       ) || !!document.querySelector('[data-testid="eror-404-description"]')
     )
   })
-  if (is_private || is_disabled || is_404) {
-    let payload = JSON.stringify({ is_disabled, is_404 })
+  let is_taken_down = await page.evaluate(() => {
+    return (
+      Array.from(document.querySelectorAll('h3')).some(
+        h3 => h3.innerText == 'Repository unavailable due to DMCA takedown.',
+      ) &&
+      !!document.querySelector(
+        'a[href="https://docs.github.com/articles/dmca-takedown-policy"]',
+      )
+    )
+  })
+  if (is_private || is_disabled || is_404 || is_taken_down) {
+    let payload = JSON.stringify({ is_disabled, is_404, is_taken_down })
     let now = Date.now()
     db.transaction(() => {
       /* repo page */
