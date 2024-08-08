@@ -1,5 +1,5 @@
 import { filter, find, seedRow, getId, update, del } from 'better-sqlite3-proxy'
-import { proxy } from './proxy'
+import { Repo, proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
 import { readdirSync, statSync, writeFileSync } from 'fs'
@@ -642,6 +642,53 @@ function checked_replace(text: string, pattern: string, into: string) {
   throw new Error(`Failed to find pattern "${pattern}" in text "${text}"`)
 }
 
+function migrate_repo(from_id: number, to_id: number) {
+  update(proxy.npm_package, { repo_id: from_id }, { repo_id: to_id })
+  let rows = filter(proxy.repo_keyword, { repo_id: from_id })
+  for (let row of rows) {
+    let has = find(proxy.repo_keyword, {
+      repo_id: to_id,
+      keyword_id: row.keyword_id,
+    })
+    if (has) {
+      delete proxy.repo_keyword[row.id!]
+    } else {
+      row.repo_id = to_id
+    }
+  }
+  let page_id = proxy.repo[from_id].page_id
+  delete proxy.repo[from_id]
+  delete proxy.page[page_id]
+}
+
+function remove_hash_in_repo() {
+  let ids = db
+    .prepare<void[], number>(
+      /* sql */ `
+  select id from repo where name like '%#%'
+  `,
+    )
+    .pluck()
+    .all()
+  for (let id of ids) {
+    let repo = proxy.repo[id]
+    let page = repo.page!
+    let url = repo.url
+    let clean_url = url.split('#')[0]
+    if (url != clean_url) {
+      let clean_repo = find(proxy.repo, { url: clean_url })
+      if (clean_repo) {
+        migrate_repo(repo.id!, clean_repo.id!)
+        continue
+      }
+    }
+    repo.name = repo.name.split('#')[0]
+    repo.url = repo.url.split('#')[0]
+    page.url = page.url.split('#')[0]
+  }
+}
+run(remove_hash_in_repo)
+
 function remove_bracket_in_repo() {
   let ids = db
     .prepare<void[], number>(
@@ -660,3 +707,31 @@ function remove_bracket_in_repo() {
   }
 }
 run(remove_bracket_in_repo)
+
+function remove_dot_git_in_repo() {
+  let ids = db
+    .prepare<void[], number>(
+      /* sql */ `
+  select id from repo where name like '%.git'
+  `,
+    )
+    .pluck()
+    .all()
+  for (let id of ids) {
+    let repo = proxy.repo[id]
+    let page = repo.page!
+    let url = repo.url
+    let clean_url = url.split('.git')[0]
+    if (url != clean_url) {
+      let clean_repo = find(proxy.repo, { url: clean_url })
+      if (clean_repo) {
+        migrate_repo(repo.id!, clean_repo.id!)
+        continue
+      }
+    }
+    repo.name = repo.name.split('.git')[0]
+    repo.url = repo.url.split('.git')[0]
+    page.url = page.url.split('.git')[0]
+  }
+}
+run(remove_dot_git_in_repo)

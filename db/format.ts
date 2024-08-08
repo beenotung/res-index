@@ -219,6 +219,9 @@ export function cleanRepoUrl(url: string | null): string | null {
     }
   }
 
+  // e.g. "https://github.com/keystonejs/keystone.git#main"
+  url = url.split('#')[0]
+
   // e.g. "https://github.com/citelab/JAM.git"
   url = remove_suffix(url, '.git')
 
