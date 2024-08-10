@@ -1,6 +1,6 @@
 import { chromium } from 'playwright'
 import { fetch_retry } from '@beenotung/tslib/async/network'
-import { DAY } from '@beenotung/tslib/time'
+import { DAY, SECOND } from '@beenotung/tslib/time'
 import { db } from './db'
 import { del, filter, find, getId } from 'better-sqlite3-proxy'
 import { GracefulPage } from 'graceful-playwright'
@@ -381,9 +381,14 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
     }
   })
   if (!is_empty) {
+    let timer = setTimeout(() => {
+      console.log()
+      console.log('waiting relative time:', repo.url)
+    }, 10 * SECOND)
     await page.waitForSelector(
       '[data-testid="latest-commit-details"] relative-time',
     )
+    clearTimeout(timer)
   }
   let res = await page.evaluate(() => {
     let p = document.querySelector<HTMLParagraphElement>('.Layout-sidebar h2+p')
