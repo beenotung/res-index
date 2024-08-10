@@ -372,7 +372,10 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   }
   let is_empty = await page.evaluate(() => {
     for (let h3 of document.querySelectorAll('h3')) {
-      if (h3.innerText == 'This repository is empty.') {
+      if (
+        h3.innerText == 'This repository is empty.' ||
+        h3.innerText == 'This repository doesn’t have any branches.'
+      ) {
         return true
       }
     }
