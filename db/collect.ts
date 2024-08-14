@@ -385,10 +385,14 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
       console.log()
       console.log('waiting relative time:', repo.url)
     }, 10 * SECOND)
-    await page.waitForSelector(
-      '[data-testid="latest-commit-details"] relative-time',
-    )
+    let error = await page
+      .waitForSelector('[data-testid="latest-commit-details"] relative-time')
+      .catch(error => String(error))
     clearTimeout(timer)
+    if (String(error).includes('Timeout')) {
+      /* maybe too much commits, retry later */
+      return
+    }
   }
   let res = await page.evaluate(() => {
     let p = document.querySelector<HTMLParagraphElement>('.Layout-sidebar h2+p')
