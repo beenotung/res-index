@@ -706,11 +706,17 @@ namespace sync_with_remote_v2 {
         cli.update(
           `upload_updated_data (${i}/${n}) ${table}: uploading ${rows.length} updated rows ...`,
         )
-        // TODO break into chunks
-        await post<typeof on_receive_updated_rows>(
-          toRouteUrl(routes, '/dataset/updated-rows'),
-          { table, rows },
-        )
+        let done = 0
+        await upload_rows(rows, async buffer => {
+          cli.update(
+            `upload_updated_data (${i}/${n}) ${table}: uploading ${done + buffer.length}/${rows.length} updated rows ...`,
+          )
+          await post<typeof on_receive_updated_rows>(
+            toRouteUrl(routes, '/dataset/updated-rows'),
+            { table, rows },
+          )
+          done += buffer.length
+        })
         cli.update(
           `upload_updated_data (${i}/${n}) ${table}: uploaded ${rows.length} updated rows`,
         )
@@ -736,12 +742,21 @@ namespace sync_with_remote_v2 {
         )
         let rows = select_new_rows(table, result.last_id)
         cli.update(
-          `upload_new_data (${i}/${n}) ${table}: remote inserting ${rows.length} new rows...`,
+          `upload_new_data (${i}/${n}) ${table}: uploading ${rows.length} new rows...`,
         )
-        // TODO break into chunks
-        await post<typeof on_receive_updated_rows>(
-          toRouteUrl(routes, '/dataset/updated-rows'),
-          { table, rows },
+        let done = 0
+        await upload_rows(rows, async buffer => {
+          cli.update(
+            `upload_new_data (${i}/${n}) ${table}: uploading ${done + buffer.length}/${rows.length} new rows...`,
+          )
+          await post<typeof on_receive_updated_rows>(
+            toRouteUrl(routes, '/dataset/updated-rows'),
+            { table, rows: buffer },
+          )
+          done += buffer.length
+        })
+        cli.update(
+          `upload_new_data (${i}/${n}) ${table}: uploaded ${rows.length} new rows...`,
         )
         cli.nextLine()
       }
@@ -796,6 +811,24 @@ namespace sync_with_remote_v2 {
         )
         .all({ last_id })
       return rows as { id: number }[]
+    }
+    async function upload_rows<T>(
+      rows: T[],
+      sendFn: (buffer: T[]) => Promise<void>,
+    ) {
+      let max_length = 1024 * 1024
+      let buffer: T[] = []
+      for (let row of rows) {
+        buffer.push(row)
+        let len = JSON.stringify(buffer).length
+        if (len >= max_length) {
+          await sendFn(buffer)
+          buffer = []
+        }
+      }
+      if (buffer.length > 0) {
+        await sendFn(buffer)
+      }
     }
 
     /* main flow */
