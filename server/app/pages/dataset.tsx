@@ -843,6 +843,7 @@ namespace sync_with_remote_v2 {
       let max_length = 200
       let buffer: T[] = []
       for (let row of rows) {
+        delete (row as any).payload
         buffer.push(row)
 
         if (buffer.length >= max_length) {
