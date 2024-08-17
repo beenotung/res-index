@@ -882,10 +882,13 @@ namespace sync_with_remote_v2 {
     table: keyof typeof proxy
     rows: { id: number }[]
   }) {
-    let table = proxy[body.table]
-    for (let row of body.rows) {
-      table[row.id] = row as any
-    }
+    db.transaction(() => {
+      let table = proxy[body.table]
+      for (let row of body.rows) {
+        table[row.id] = row as any
+      }
+      clearCache(proxy)
+    })()
     return {}
   }
 
