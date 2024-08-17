@@ -707,15 +707,17 @@ namespace sync_with_remote_v2 {
           `upload_updated_data (${i}/${n}) ${table}: uploading ${rows.length} updated rows ...`,
         )
         let done = 0
+        let failed = 0
         await upload_rows(rows, async buffer => {
           cli.update(
-            `upload_updated_data (${i}/${n}) ${table}: uploading ${done + buffer.length}/${rows.length} updated rows ...`,
+            `upload_updated_data (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${rows.length} updated rows (${failed} failed)...`,
           )
-          await post<typeof on_receive_updated_rows>(
+          let result = await post<typeof on_receive_updated_rows>(
             toRouteUrl(routes, '/dataset/updated-rows'),
             { table, rows: buffer },
           )
-          done += buffer.length
+          done += result.updated
+          failed += result.failed
         })
         cli.update(
           `upload_updated_data (${i}/${n}) ${table}: uploaded ${rows.length} updated rows`,
@@ -745,15 +747,17 @@ namespace sync_with_remote_v2 {
           `upload_new_data (${i}/${n}) ${table}: uploading ${rows.length} new rows...`,
         )
         let done = 0
+        let failed = 0
         await upload_rows(rows, async buffer => {
           cli.update(
-            `upload_new_data (${i}/${n}) ${table}: uploading ${done + buffer.length}/${rows.length} new rows...`,
+            `upload_new_data (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${rows.length} new rows (${failed} failed)...`,
           )
-          await post<typeof on_receive_updated_rows>(
+          let result = await post<typeof on_receive_updated_rows>(
             toRouteUrl(routes, '/dataset/updated-rows'),
             { table, rows: buffer },
           )
-          done += buffer.length
+          done += result.updated
+          failed += result.failed
         })
         cli.update(
           `upload_new_data (${i}/${n}) ${table}: uploaded ${rows.length} new rows...`,
@@ -891,14 +895,25 @@ namespace sync_with_remote_v2 {
     table: keyof typeof proxy
     rows: { id: number }[]
   }) {
+    let updated = 0
+    let failed = 0
     db.transaction(() => {
       let table = proxy[body.table]
       for (let row of body.rows) {
-        table[row.id] = row as any
+        try {
+          table[row.id] = row as any
+          updated++
+        } catch (error) {
+          failed++
+          if (String(error).includes('FOREIGN KEY constraint failed')) {
+            continue
+          }
+          throw error
+        }
       }
       clearCache(proxy)
     })()
-    return {}
+    return { updated, failed }
   }
 
   /* for upload_new_data() */
