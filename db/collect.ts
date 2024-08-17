@@ -771,8 +771,8 @@ let published_npm_package_detail_parser = object({
       ),
       optionalDependencies: optional(dependencies_parser),
       dist: object({
-        fileCount: optional(int({ min: 1 })),
-        unpackedSize: optional(int({ min: 1 })),
+        fileCount: optional(int({ min: 0 })),
+        unpackedSize: optional(int({ min: 0 })),
       }),
       _npmUser: optional(
         object({
