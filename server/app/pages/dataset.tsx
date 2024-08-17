@@ -713,7 +713,7 @@ namespace sync_with_remote_v2 {
           )
           await post<typeof on_receive_updated_rows>(
             toRouteUrl(routes, '/dataset/updated-rows'),
-            { table, rows },
+            { table, rows: buffer },
           )
           done += buffer.length
         })
@@ -816,14 +816,23 @@ namespace sync_with_remote_v2 {
       rows: T[],
       sendFn: (buffer: T[]) => Promise<void>,
     ) {
-      let max_length = 1024 * 1024
+      let max_size = 1024 * 1024
+      let max_length = 1
       let buffer: T[] = []
       for (let row of rows) {
         buffer.push(row)
-        let len = JSON.stringify(buffer).length
-        if (len >= max_length) {
+
+        if (buffer.length >= max_length) {
           await sendFn(buffer)
           buffer = []
+          continue
+        }
+
+        let size = JSON.stringify(buffer).length
+        if (size >= max_size) {
+          await sendFn(buffer)
+          buffer = []
+          continue
         }
       }
       if (buffer.length > 0) {
