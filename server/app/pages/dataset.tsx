@@ -528,6 +528,12 @@ let routes = {
     streaming: false,
     resolve: context => brideToFn(context, sync_npm_package.on_receive_batch),
   },
+  '/dataset/trim-table': {
+    title: apiEndpointTitle,
+    description: 'delete all rows to resolve unique conflict',
+    streaming: false,
+    resolve: context => brideToFn(context, sync_with_remote_v2.on_trim_table),
+  },
   '/dataset/deleted-id-ranges': {
     title: apiEndpointTitle,
     description: 'upload deleted id ranges',
@@ -656,114 +662,109 @@ namespace sync_with_remote_v2 {
 
     let cli = new ProgressCli()
 
-    async function delete_removed_data() {
+    async function trim_table(i: number, table: Table) {
+      cli.update(`trim_table (${i}/${n}) ${table}`)
+      await post<typeof on_trim_table>(
+        toRouteUrl(routes, '/dataset/trim-table'),
+        { table },
+      )
+    }
+    async function delete_removed_data(i: number, table: Table) {
       // 1. local find deleted id ranges
       // 2. remote delete the id ranges
-      let i = 0
-      for (let table of tables_atom_last) {
-        i++
-        let rows = proxy[table].length
-        cli.update(
-          `delete_removed_data (${i}/${n}) ${table}: local selecting (total ${rows} rows)...`,
-        )
-        let { ranges, total } = select_deleted_id_ranges(table)
-        cli.update(
-          `delete_removed_data (${i}/${n}) ${table}: remote deleting ${total} rows...`,
-        )
-        let result = await post<typeof on_receive_deleted_id_ranges>(
-          toRouteUrl(routes, '/dataset/deleted-id-ranges'),
-          { table, deleted_id_ranges: ranges },
-        )
-        cli.update(
-          `delete_removed_data (${i}/${n}) ${table}: remote deleted ${result.deleted} rows`,
-        )
-        cli.nextLine()
-      }
+      let rows = proxy[table].length
+      cli.update(
+        `delete_removed_data (${i}/${n}) ${table}: local selecting (total ${rows} rows)...`,
+      )
+      let { ranges, total } = select_deleted_id_ranges(table)
+      cli.update(
+        `delete_removed_data (${i}/${n}) ${table}: remote deleting ${total} rows...`,
+      )
+      let result = await post<typeof on_receive_deleted_id_ranges>(
+        toRouteUrl(routes, '/dataset/deleted-id-ranges'),
+        { table, deleted_id_ranges: ranges },
+      )
+      cli.update(
+        `delete_removed_data (${i}/${n}) ${table}: remote deleted ${result.deleted} rows`,
+      )
+      cli.nextLine()
     }
-    async function upload_updated_data() {
+    async function upload_updated_data(i: number, table: Table) {
       // 1. remote find last updated_at
       // 2. local select rows with updated_at >= server's max value
       // 3. remote update the rows
-      let i = 0
-      for (let table of tables_atom_first) {
-        i++
-        cli.update(
-          `upload_updated_data (${i}/${n}) ${table}: remote selecting last updated_at...`,
-        )
-        let result = await post<typeof on_get_last_updated_at>(
-          toRouteUrl(routes, '/dataset/last-updated_at'),
-          { table },
-        )
-        if (result.last_updated_at == 'none') {
-          cli.update(`upload_updated_data (${i}/${n}) ${table}: skip`)
-          cli.nextLine()
-          continue
-        }
-        cli.update(
-          `upload_updated_data (${i}/${n}) ${table}: local select updated rows (since ${result.last_updated_at}) ...`,
-        )
-        let rows = select_updated_rows(table, result.last_updated_at)
-        cli.update(
-          `upload_updated_data (${i}/${n}) ${table}: uploading ${rows.length} updated rows ...`,
-        )
-        let done = 0
-        let failed = 0
-        await upload_rows(rows, async buffer => {
-          cli.update(
-            `upload_updated_data (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${rows.length} updated rows (${failed} failed)...`,
-          )
-          let result = await post<typeof on_receive_updated_rows>(
-            toRouteUrl(routes, '/dataset/updated-rows'),
-            { table, rows: buffer },
-          )
-          done += result.updated
-          failed += result.failed
-        })
-        cli.update(
-          `upload_updated_data (${i}/${n}) ${table}: uploaded ${rows.length} updated rows`,
-        )
+      cli.update(
+        `upload_updated_data (${i}/${n}) ${table}: remote selecting last updated_at...`,
+      )
+      let result = await post<typeof on_get_last_updated_at>(
+        toRouteUrl(routes, '/dataset/last-updated_at'),
+        { table },
+      )
+      if (result.last_updated_at == 'none') {
+        cli.update(`upload_updated_data (${i}/${n}) ${table}: skip`)
         cli.nextLine()
+        return
       }
+      cli.update(
+        `upload_updated_data (${i}/${n}) ${table}: local select updated rows (since ${result.last_updated_at}) ...`,
+      )
+      let { count, iter } = select_updated_rows(table, result.last_updated_at)
+      cli.update(
+        `upload_updated_data (${i}/${n}) ${table}: uploading ${count} updated rows ...`,
+      )
+      let done = 0
+      let failed = 0
+      await upload_rows(iter, async buffer => {
+        cli.update(
+          `upload_updated_data (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${count} updated rows (${failed} failed)...`,
+        )
+        let result = await post<typeof on_receive_updated_rows>(
+          toRouteUrl(routes, '/dataset/updated-rows'),
+          { table, rows: buffer },
+        )
+        done += result.updated
+        failed += result.failed
+      })
+      cli.update(
+        `upload_updated_data (${i}/${n}) ${table}: uploaded ${done} updated rows, failed ${failed} rows`,
+      )
+      cli.nextLine()
     }
-    async function upload_new_data() {
+    async function upload_new_data(i: number, table: Table) {
       // 1. remote find last id
       // 2. local select new rows
       // 3. remote insert new rows
-      let i = 0
-      for (let table of tables_atom_first) {
-        i++
+      cli.update(
+        `upload_new_data (${i}/${n}) ${table}: remote selecting last row id...`,
+      )
+      let result = await post<typeof on_get_last_row_id>(
+        toRouteUrl(routes, '/dataset/last-row-id'),
+        { table },
+      )
+      cli.update(
+        `upload_new_data (${i}/${n}) ${table}: local selecting new rows after id=${result.last_id}...`,
+      )
+      let { count, iter } = select_new_rows(table, result.last_id)
+      cli.update(
+        `upload_new_data (${i}/${n}) ${table}: uploading ${count} new rows...`,
+      )
+      let done = 0
+      let failed = 0
+      await upload_rows(iter, async buffer => {
         cli.update(
-          `upload_new_data (${i}/${n}) ${table}: remote selecting last row id...`,
+          `upload_new_data (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${count} new rows (${failed} failed)...`,
         )
-        let result = await post<typeof on_get_last_row_id>(
-          toRouteUrl(routes, '/dataset/last-row-id'),
-          { table },
+        let result = await post<typeof on_receive_updated_rows>(
+          toRouteUrl(routes, '/dataset/updated-rows'),
+          { table, rows: buffer },
         )
-        cli.update(
-          `upload_new_data (${i}/${n}) ${table}: local selecting new rows after id=${result.last_id}...`,
-        )
-        let rows = select_new_rows(table, result.last_id)
-        cli.update(
-          `upload_new_data (${i}/${n}) ${table}: uploading ${rows.length} new rows...`,
-        )
-        let done = 0
-        let failed = 0
-        await upload_rows(rows, async buffer => {
-          cli.update(
-            `upload_new_data (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${rows.length} new rows (${failed} failed)...`,
-          )
-          let result = await post<typeof on_receive_updated_rows>(
-            toRouteUrl(routes, '/dataset/updated-rows'),
-            { table, rows: buffer },
-          )
-          done += result.updated
-          failed += result.failed
-        })
-        cli.update(
-          `upload_new_data (${i}/${n}) ${table}: uploaded ${rows.length} new rows...`,
-        )
-        cli.nextLine()
-      }
+        done += result.updated
+        failed += result.failed
+      })
+      cli.update(
+        `upload_new_data (${i}/${n}) ${table}: uploaded ${done} new rows, failed ${failed} rows`,
+      )
+      cli.nextLine()
     }
 
     /* helper functions */
@@ -797,27 +798,44 @@ namespace sync_with_remote_v2 {
       return { ranges, total }
     }
     function select_updated_rows(table: string, last_updated_at: string) {
-      let rows = db
-        .prepare(
+      let count =
+        db
+          .prepare<{ last_updated_at: string }, number>(
+            /* sql */ `
+      select count(*) from "${table}" where updated_at >= :last_updated_at
+      `,
+          )
+          .get({ last_updated_at }) || 0
+      let iter = db
+        .prepare<{ last_updated_at: string }, { id: number }>(
           /* sql */ `
       select * from "${table}" where updated_at >= :last_updated_at
       `,
         )
-        .all({ last_updated_at })
-      return rows as { id: number }[]
+        .iterate({ last_updated_at })
+      return { count, iter }
     }
     function select_new_rows(table: string, last_id: number) {
-      let rows = db
-        .prepare(
+      let count =
+        db
+          .prepare<{ last_id: number }, number>(
+            /* sql */ `
+      select count(*) from "${table}" where id > :last_id
+      `,
+          )
+          .pluck()
+          .get({ last_id }) || 0
+      let iter = db
+        .prepare<{ last_id: number }, { id: number }>(
           /* sql */ `
       select * from "${table}" where id > :last_id
       `,
         )
-        .all({ last_id })
-      return rows as { id: number }[]
+        .iterate({ last_id })
+      return { count, iter }
     }
     async function upload_rows<T>(
-      rows: T[],
+      rows: Iterable<T>,
       sendFn: (buffer: T[]) => Promise<void>,
     ) {
       let max_size = 1024 * 1024
@@ -845,9 +863,28 @@ namespace sync_with_remote_v2 {
     }
 
     /* main flow */
-    await delete_removed_data()
-    await upload_updated_data()
-    await upload_new_data()
+    let i = 0
+    for (let table of tables_atom_last) {
+      i++
+      // await trim_table(i, table)
+      await delete_removed_data(i, table)
+    }
+    i = 0
+    for (let table of tables_atom_first) {
+      i++
+      await upload_updated_data(i, table)
+      await upload_new_data(i, table)
+    }
+  }
+
+  /* for trim_table() */
+  export function on_trim_table(body: { table: string }) {
+    db.prepare(
+      /* sql */ `
+    delete from "${body.table}"
+    `,
+    ).run()
+    return {}
   }
 
   /* for delete_removed_data() */
