@@ -16,6 +16,7 @@ import { EarlyTerminate, toRouteUrl } from '../helpers.js'
 import { binArray } from '@beenotung/tslib/array.js'
 import { Timer, startTimer } from '@beenotung/tslib/timer.js'
 import { later } from '@beenotung/tslib/async/wait.js'
+import { ProgressCli } from '@beenotung/tslib/progress-cli.js'
 
 let pageTitle = 'Dataset'
 let addPageTitle = 'Add Dataset'
@@ -487,7 +488,7 @@ async function post<Fn extends (input: any) => any>(
   }
 }
 
-let routes: Routes = {
+let routes = {
   '/dataset': {
     title: title(pageTitle),
     description: 'TODO',
@@ -527,7 +528,28 @@ let routes: Routes = {
     streaming: false,
     resolve: context => brideToFn(context, sync_npm_package.on_receive_batch),
   },
-}
+  '/dataset/deleted-id-ranges': {
+    title: apiEndpointTitle,
+    description: 'upload deleted id ranges',
+    streaming: false,
+    resolve: context =>
+      brideToFn(context, sync_with_remote_v2.on_receive_deleted_id_ranges),
+  },
+  '/dataset/last-updated_at': {
+    title: apiEndpointTitle,
+    description: 'get last updated_at',
+    streaming: false,
+    resolve: context =>
+      brideToFn(context, sync_with_remote_v2.on_get_last_updated_at),
+  },
+  '/dataset/updated-rows': {
+    title: apiEndpointTitle,
+    description: 'upload updated rows',
+    streaming: false,
+    resolve: context =>
+      brideToFn(context, sync_with_remote_v2.on_receive_updated_rows),
+  },
+} satisfies Routes
 
 function brideToFn<Fn extends (input: any) => any>(
   context: DynamicContext,
@@ -606,31 +628,173 @@ async function sync_with_remote() {
   timer.end()
 }
 
-async function sync_with_remote_v2() {
-  function delete_removed_data() {
-    // 1. local send all id to server
-    // 2. server select all id
-    // 3. find extra ids in server, delete them and their foreign key references
-  }
-  function upload_updated_data() {
-    // 1. server response max updated_at
-    // 2. local select rows with updated_at >= server's max value
-  }
-  function upload_new_data() {
-    // 1. local send all id to server
-    // 2. server select all id
-    // 3. server response missing ids
-    // 4. local send new rows
+namespace sync_with_remote_v2 {
+  type IDRange = [start: number, end: number]
+  export async function main() {
+    let tables_atom_first = Object.keys(proxy) as Array<keyof typeof proxy>
+    let tables_atom_last = tables_atom_first.slice().reverse()
+    let n = tables_atom_first.length
+
+    let cli = new ProgressCli()
+
+    async function delete_removed_data() {
+      // 1. local find deleted id ranges
+      // 2. remote delete the id ranges
+      let i = 0
+      for (let table of tables_atom_last) {
+        i++
+        let rows = proxy[table].length
+        cli.update(
+          `delete_removed_data (${i}/${n}) ${table}: local selecting (total ${rows} rows)...`,
+        )
+        let { ranges, total } = select_deleted_id_ranges(table)
+        cli.update(
+          `delete_removed_data (${i}/${n}) ${table}: remote deleting ${total} rows...`,
+        )
+        let result = await post<typeof on_receive_deleted_id_ranges>(
+          toRouteUrl(routes, '/dataset/deleted-id-ranges'),
+          { table, deleted_id_ranges: ranges },
+        )
+        cli.update(
+          `delete_removed_data (${i}/${n}) ${table}: remote deleted ${result.deleted} rows`,
+        )
+        cli.nextLine()
+      }
+    }
+    async function upload_updated_data() {
+      // 1. remote find last updated_at
+      // 2. local select rows with updated_at >= server's max value
+      // 3. remote update the rows
+      let i = 0
+      for (let table of tables_atom_first) {
+        i++
+        cli.update(
+          `upload_updated_data (${i}/${n}) ${table}: remote selecting last updated_at...`,
+        )
+        let result = await post<typeof on_get_last_updated_at>(
+          toRouteUrl(routes, '/dataset/last-updated_at'),
+          { table },
+        )
+        cli.update(
+          `upload_updated_data (${i}/${n}) ${table}: local select updated rows (since ${result.last_updated_at}) ...`,
+        )
+        let rows = select_updated_rows(table, result.last_updated_at)
+        cli.update(
+          `upload_updated_data (${i}/${n}) ${table}: uploading ${rows.length} updated rows ...`,
+        )
+        await post<typeof on_receive_updated_rows>(
+          toRouteUrl(routes, '/dataset/updated-rows'),
+          { table, rows },
+        )
+        cli.update(
+          `upload_updated_data (${i}/${n}) ${table}: uploaded ${rows.length} updated rows`,
+        )
+        cli.nextLine()
+      }
+    }
+    function upload_new_data() {
+      // 1. local send all id to server
+      // 2. server select all id
+      // 3. server response missing ids
+      // 4. local send new rows
+      // TODO
+    }
+
+    /* helper functions */
+    function select_deleted_id_ranges(table: string) {
+      let ranges: IDRange[] = []
+      let total = 0
+      let rows = db
+        .prepare<void[], number>(
+          /* sql */ `
+    select id
+    from "${table}"
+    order by id asc
+    `,
+        )
+        .pluck()
+        .iterate()
+      let last = 0
+      for (let id of rows) {
+        if (last == 0) {
+          last = id
+          continue
+        }
+        if (id == last + 1) {
+          last = id
+          continue
+        }
+        ranges.push([last + 1, id - 1])
+        total += id - last + 1
+        last = id
+      }
+      return { ranges, total }
+    }
+    function select_updated_rows(table: string, last_updated_at: string) {
+      let rows = db
+        .prepare(
+          /* sql */ `
+      select * from "${table}" where updated_at >= :last_updated_at
+      `,
+        )
+        .all({ last_updated_at })
+      return rows as { id: number }[]
+    }
+
+    /* main flow */
+    // await delete_removed_data()
+    await upload_updated_data()
+    upload_new_data()
   }
 
-  /* main flow */
-  delete_removed_data()
-  upload_updated_data()
-  upload_new_data()
+  /* for delete_removed_data() */
+  export function on_receive_deleted_id_ranges(body: {
+    table: string
+    deleted_id_ranges: IDRange[]
+  }) {
+    let del = db.prepare(/* sql */ `
+    delete from "${body.table}" where id between :start and :end
+    `)
+    let deleted = 0
+    for (let [start, end] of body.deleted_id_ranges) {
+      try {
+        deleted += del.run({ start, end }).changes
+      } catch (error) {
+        if (String(error).includes('FOREIGN KEY constraint failed')) {
+          continue
+        }
+        throw error
+      }
+    }
+    return { deleted }
+  }
+
+  /* for upload_updated_data() */
+  export function on_get_last_updated_at(body: { table: string }) {
+    let last_updated_at = db
+      .prepare(
+        /* sql */ `
+    select max(updated_at) from "${body.table}"
+    `,
+      )
+      .pluck()
+      .get() as string
+    return { last_updated_at }
+  }
+  export function on_receive_updated_rows(body: {
+    table: keyof typeof proxy
+    rows: { id: number }[]
+  }) {
+    let table = proxy[body.table]
+    for (let row of body.rows) {
+      table[row.id] = row as any
+    }
+    return {}
+  }
 }
 
 if (import.meta.filename == process.argv[1]) {
-  await sync_with_remote()
+  await sync_with_remote_v2.main()
 }
 
 export default { routes }
