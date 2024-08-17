@@ -817,7 +817,7 @@ namespace sync_with_remote_v2 {
       sendFn: (buffer: T[]) => Promise<void>,
     ) {
       let max_size = 1024 * 1024
-      let max_length = 1
+      let max_length = 200
       let buffer: T[] = []
       for (let row of rows) {
         buffer.push(row)
