@@ -47,6 +47,12 @@ export function cleanRepoUrl(url: string | null): string | null {
   // e.g. "git+https://github.com/beenotung/tslib.git"
   url = remove_prefix(url, 'git+')
 
+  // e.g. "https://github.com/keystonejs/keystone.git#main"
+  url = url.split('#')[0]
+
+  // e.g. "https://github.com/citelab/JAM.git"
+  url = remove_suffix(url, '.git')
+
   // e.g. "https+git://github.com/pburtchaell/react-notification"
   url = url.replace(/^https\+git:\/\//, 'https://')
 
@@ -218,12 +224,6 @@ export function cleanRepoUrl(url: string | null): string | null {
         throw new Error(`Unexpected github repo url: ${url}`)
     }
   }
-
-  // e.g. "https://github.com/keystonejs/keystone.git#main"
-  url = url.split('#')[0]
-
-  // e.g. "https://github.com/citelab/JAM.git"
-  url = remove_suffix(url, '.git')
 
   return url
 }
