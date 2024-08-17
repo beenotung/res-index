@@ -840,7 +840,7 @@ namespace sync_with_remote_v2 {
       sendFn: (buffer: T[]) => Promise<void>,
     ) {
       let max_size = 1024 * 1024
-      let max_length = 200
+      let max_length = 2000
       let buffer: T[] = []
       for (let row of rows) {
         delete (row as any).payload
