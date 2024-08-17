@@ -303,6 +303,28 @@ where url like '%@%'
 }
 run(fix_repo_url)
 
+// remove extra package path after repo name
+function remove_repository_pathname() {
+  let rows = db.query<{
+    id: number
+    name: string
+    repository: string
+  }>(/* sql */ `
+select id, name, repository
+from npm_package
+where repository like 'https://github.com/%/%/%'
+  and repo_id is null
+`)
+  for (let row of rows) {
+    let repo_url = cleanRepoUrl(row.repository)
+    if (repo_url) {
+      let repo = storeRepo(repo_url)
+      proxy.npm_package[row.id].repo_id = repo.id!
+    }
+  }
+}
+run(remove_repository_pathname)
+
 function fix_npm_repository() {
   let rows = db.query<{ id: number; repository: string }>(/* sql */ `
     select id, repository
