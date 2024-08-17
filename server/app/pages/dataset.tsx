@@ -668,6 +668,7 @@ namespace sync_with_remote_v2 {
         toRouteUrl(routes, '/dataset/trim-table'),
         { table },
       )
+      cli.nextLine()
     }
     async function delete_removed_data(i: number, table: Table) {
       // 1. local find deleted id ranges
