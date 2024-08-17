@@ -549,6 +549,13 @@ let routes = {
     resolve: context =>
       brideToFn(context, sync_with_remote_v2.on_receive_updated_rows),
   },
+  '/dataset/last-row-id': {
+    title: apiEndpointTitle,
+    description: 'get last row id',
+    streaming: false,
+    resolve: context =>
+      brideToFn(context, sync_with_remote_v2.on_get_last_row_id),
+  },
 } satisfies Routes
 
 function brideToFn<Fn extends (input: any) => any>(
@@ -630,8 +637,20 @@ async function sync_with_remote() {
 
 namespace sync_with_remote_v2 {
   type IDRange = [start: number, end: number]
+  type Table = keyof typeof proxy
   export async function main() {
-    let tables_atom_first = Object.keys(proxy) as Array<keyof typeof proxy>
+    let tables_atom_first: Table[] = [
+      'page',
+      'programming_language',
+      'author',
+      'domain',
+      'repo',
+      'keyword',
+      'repo_keyword',
+      'npm_package',
+      'npm_package_keyword',
+      'npm_package_dependency',
+    ]
     let tables_atom_last = tables_atom_first.slice().reverse()
     let n = tables_atom_first.length
 
@@ -675,6 +694,11 @@ namespace sync_with_remote_v2 {
           toRouteUrl(routes, '/dataset/last-updated_at'),
           { table },
         )
+        if (result.last_updated_at == 'none') {
+          cli.update(`upload_updated_data (${i}/${n}) ${table}: skip`)
+          cli.nextLine()
+          continue
+        }
         cli.update(
           `upload_updated_data (${i}/${n}) ${table}: local select updated rows (since ${result.last_updated_at}) ...`,
         )
@@ -682,6 +706,7 @@ namespace sync_with_remote_v2 {
         cli.update(
           `upload_updated_data (${i}/${n}) ${table}: uploading ${rows.length} updated rows ...`,
         )
+        // TODO break into chunks
         await post<typeof on_receive_updated_rows>(
           toRouteUrl(routes, '/dataset/updated-rows'),
           { table, rows },
@@ -692,12 +717,34 @@ namespace sync_with_remote_v2 {
         cli.nextLine()
       }
     }
-    function upload_new_data() {
-      // 1. local send all id to server
-      // 2. server select all id
-      // 3. server response missing ids
-      // 4. local send new rows
-      // TODO
+    async function upload_new_data() {
+      // 1. remote find last id
+      // 2. local select new rows
+      // 3. remote insert new rows
+      let i = 0
+      for (let table of tables_atom_first) {
+        i++
+        cli.update(
+          `upload_new_data (${i}/${n}) ${table}: remote selecting last row id...`,
+        )
+        let result = await post<typeof on_get_last_row_id>(
+          toRouteUrl(routes, '/dataset/last-row-id'),
+          { table },
+        )
+        cli.update(
+          `upload_new_data (${i}/${n}) ${table}: local selecting new rows after id=${result.last_id}...`,
+        )
+        let rows = select_new_rows(table, result.last_id)
+        cli.update(
+          `upload_new_data (${i}/${n}) ${table}: remote inserting ${rows.length} new rows...`,
+        )
+        // TODO break into chunks
+        await post<typeof on_receive_updated_rows>(
+          toRouteUrl(routes, '/dataset/updated-rows'),
+          { table, rows },
+        )
+        cli.nextLine()
+      }
     }
 
     /* helper functions */
@@ -740,11 +787,21 @@ namespace sync_with_remote_v2 {
         .all({ last_updated_at })
       return rows as { id: number }[]
     }
+    function select_new_rows(table: string, last_id: number) {
+      let rows = db
+        .prepare(
+          /* sql */ `
+      select * from "${table}" where id > :last_id
+      `,
+        )
+        .all({ last_id })
+      return rows as { id: number }[]
+    }
 
     /* main flow */
-    // await delete_removed_data()
+    await delete_removed_data()
     await upload_updated_data()
-    upload_new_data()
+    await upload_new_data()
   }
 
   /* for delete_removed_data() */
@@ -771,15 +828,22 @@ namespace sync_with_remote_v2 {
 
   /* for upload_updated_data() */
   export function on_get_last_updated_at(body: { table: string }) {
-    let last_updated_at = db
-      .prepare(
-        /* sql */ `
+    try {
+      let last_updated_at = db
+        .prepare(
+          /* sql */ `
     select max(updated_at) from "${body.table}"
     `,
-      )
-      .pluck()
-      .get() as string
-    return { last_updated_at }
+        )
+        .pluck()
+        .get() as string
+      return { last_updated_at }
+    } catch (error) {
+      if (String(error).includes('no such column: updated_at')) {
+        return { last_updated_at: 'none' }
+      }
+      throw error
+    }
   }
   export function on_receive_updated_rows(body: {
     table: keyof typeof proxy
@@ -790,6 +854,19 @@ namespace sync_with_remote_v2 {
       table[row.id] = row as any
     }
     return {}
+  }
+
+  /* for upload_new_data() */
+  export function on_get_last_row_id(body: { table: keyof typeof proxy }) {
+    let last_id = db
+      .prepare(
+        /* sql */ `
+    select max(id) from "${body.table}"
+    `,
+      )
+      .pluck()
+      .get() as number
+    return { last_id: last_id || 0 }
   }
 }
 
