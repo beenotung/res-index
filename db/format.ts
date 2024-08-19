@@ -237,6 +237,7 @@ let known_bad_url_usernames = new Set(
     'https://github.com/juicyllama/framework/common/dev',
     'https://github.com/mir8bloxx/cross.audio.engine/react-native-native-audio-engine',
     'https://github.com/liferay/liferay-themes-sdk/packages/liferay-theme-finder',
+    'https://github.com/scottdao/luao/packages/luao-babel-preset',
   ].map(url => parseRepoUrl(url).username),
 )
 
