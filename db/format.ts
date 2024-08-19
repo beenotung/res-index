@@ -219,7 +219,12 @@ export function cleanRepoUrl(url: string | null): string | null {
         }
 
         // e.g. "https://github.com/pyth-network/pyth-js/pyth-common-js"
-        if (isKnownUsername(parseRepoUrl(url).username)) {
+        let repo = parseRepoUrl(url)
+        if (
+          url.startsWith('https://github.com/') &&
+          repo.username &&
+          repo.name
+        ) {
           url = parts.slice(0, 5).join('/')
           break
         }
@@ -229,22 +234,6 @@ export function cleanRepoUrl(url: string | null): string | null {
   }
 
   return url
-}
-
-let known_bad_url_usernames = new Set(
-  [
-    'https://github.com/pyth-network/pyth-js/pyth-common-js',
-    'https://github.com/juicyllama/framework/common/dev',
-    'https://github.com/mir8bloxx/cross.audio.engine/react-native-native-audio-engine',
-    'https://github.com/liferay/liferay-themes-sdk/packages/liferay-theme-finder',
-    'https://github.com/scottdao/luao/packages/luao-babel-preset',
-  ].map(url => parseRepoUrl(url).username),
-)
-
-function isKnownUsername(username: string): boolean {
-  if (known_bad_url_usernames.has(username)) return true
-  if (find(proxy.author, { username })) return true
-  return false
 }
 
 export function parseRepoUrl(url: string) {
