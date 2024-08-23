@@ -311,7 +311,7 @@ function upsert_page(
 ) {
   return upsert(proxy.page, 'url', {
     url: page.url,
-    payload: null,
+    payload_hash: null,
     check_time: page.check_time,
     update_time: page.update_time,
   })
@@ -411,7 +411,7 @@ function getPageId(url: string): number {
   if (page) return page.id!
   return proxy.page.push({
     url,
-    payload: null,
+    payload_hash: null,
     check_time: null,
     update_time: null,
   })

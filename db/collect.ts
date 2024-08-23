@@ -31,6 +31,7 @@ import {
 import { cleanRepoUrl, parseRepoUrl } from './format'
 import { getLanguageId } from './store'
 import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
+import { hashString } from './hash'
 
 // TODO get repo list from username (npm package > repo > username > repo list)
 // TODO continues updates each pages
@@ -220,6 +221,7 @@ async function checkGithubRepositories(
     return { repos, nextUrl }
   })
   let indexPayload = JSON.stringify(res)
+  let indexPayloadHash = hashString(indexPayload)
   let now = Date.now()
   db.transaction(() => {
     /* index page */
@@ -227,15 +229,15 @@ async function checkGithubRepositories(
     if (!indexPage) {
       proxy.page.push({
         url: indexUrl,
-        payload: indexPayload,
+        payload_hash: indexPayloadHash,
         check_time: now,
         update_time: now,
       })
       storeRepos()
     } else {
       indexPage.check_time = now
-      if (indexPage.payload != indexPayload) {
-        indexPage.payload = indexPayload
+      if (indexPage.payload_hash != indexPayloadHash) {
+        indexPage.payload_hash = indexPayloadHash
         indexPage.update_time = now
         storeRepos()
       }
@@ -248,7 +250,7 @@ async function checkGithubRepositories(
         if (!repoPage) {
           let id = proxy.page.push({
             url: repoData.url,
-            payload: null,
+            payload_hash: null,
             check_time: null,
             update_time: repoData.update_time,
           })
@@ -356,13 +358,14 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   })
   if (is_private || is_disabled || is_404 || is_taken_down) {
     let payload = JSON.stringify({ is_disabled, is_404, is_taken_down })
+    let payloadHash = hashString(payload)
     let now = Date.now()
     db.transaction(() => {
       /* repo page */
       let page = repo.page!
       page.check_time = now
-      if (page.payload == payload && repo.is_public == false) return
-      page.payload = payload
+      if (page.payload_hash == payloadHash && repo.is_public == false) return
+      page.payload_hash = payloadHash
       page.update_time = now
 
       /* repo */
@@ -466,14 +469,15 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   })
 
   let payload = JSON.stringify(res)
+  let payloadHash = hashString(payload)
   let now = Date.now()
   // saveJSON('repo.json', payload)
   db.transaction(() => {
     /* repo page */
     let page = repo.page!
     page.check_time = now
-    if (page.payload == payload && repo.is_public != null) return
-    page.payload = payload
+    if (page.payload_hash == payloadHash && repo.is_public != null) return
+    page.payload_hash = payloadHash
     page.update_time = now
 
     /* repo */
@@ -564,6 +568,7 @@ async function collectNpmPackages(
   })
 
   let indexPayload = JSON.stringify(res)
+  let indexPayloadHash = hashString(indexPayload)
   let now = Date.now()
   db.transaction(() => {
     /* index page */
@@ -571,15 +576,15 @@ async function collectNpmPackages(
     if (!indexPage) {
       proxy.page.push({
         url: indexUrl,
-        payload: indexPayload,
+        payload_hash: indexPayloadHash,
         check_time: now,
         update_time: now,
       })
       storePackages()
     } else {
       indexPage.check_time = now
-      if (indexPage.payload != indexPayload) {
-        indexPage.payload = indexPayload
+      if (indexPage.payload_hash != indexPayloadHash) {
+        indexPage.payload_hash = indexPayloadHash
         indexPage.update_time = now
         storePackages()
       }
@@ -856,14 +861,15 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let url = page!.url
   let res = await fetch(url)
   let payload = await res.text()
+  let payloadHash = hashString(payload)
   saveJSON('npm.json', payload)
   let _pkg = npm_package_detail_parser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
     /* npm package page */
     page.check_time = now
-    if (page.payload == payload) return
-    page.payload = payload
+    if (page.payload_hash == payloadHash) return
+    page.payload_hash = payloadHash
     page.update_time = now
 
     if ('error' in _pkg) return
@@ -1225,6 +1231,7 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
   }
   let { nextHref, packages } = res
   let indexPayload = JSON.stringify(res)
+  let indexPayloadHash = hashString(indexPayload)
   let now = Date.now()
   db.transaction(() => {
     /* index page */
@@ -1232,15 +1239,15 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
     if (!indexPage) {
       proxy.page.push({
         url: indexUrl,
-        payload: indexPayload,
+        payload_hash: indexPayloadHash,
         check_time: now,
         update_time: now,
       })
       storePackages()
     } else {
       indexPage.check_time = now
-      if (indexPage.payload != indexPayload) {
-        indexPage.payload = indexPayload
+      if (indexPage.payload_hash != indexPayloadHash) {
+        indexPage.payload_hash = indexPayloadHash
         indexPage.update_time = now
         storePackages()
       }
@@ -1282,14 +1289,15 @@ async function collectNpmPackageDownloads(npm_package: NpmPackage) {
   let url = page.url
   let res = await fetch(url)
   let payload = await res.text()
+  let payloadHash = hashString(payload)
   // saveJSON('download.json', payload)
   let json = npmPackageDownloadsParser.parse(JSON.parse(payload))
   let now = Date.now()
   db.transaction(() => {
     /* npm download page */
     page.check_time = now
-    if (page.payload == payload) return
-    page.payload = payload
+    if (page.payload_hash == payloadHash) return
+    page.payload_hash = payloadHash
     if ('error' in json) return
     page.update_time = parseNpmPackageDownloadsUpdateTime(json)
 
@@ -1315,7 +1323,7 @@ function getPageId(url: string): number {
   if (page) return page.id!
   return proxy.page.push({
     url,
-    payload: null,
+    payload_hash: null,
     check_time: null,
     update_time: null,
   })

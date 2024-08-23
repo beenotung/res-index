@@ -107,7 +107,7 @@ page
 ----
 id integer PK
 url text unique
-payload json NULL
+payload_hash text NULL
 check_time integer NULL
 update_time integer NULL
 

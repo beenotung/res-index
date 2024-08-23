@@ -90,7 +90,7 @@ export type VerificationCode = {
 export type Page = {
   id?: null | number
   url: string
-  payload: null | string // json
+  payload_hash: null | string
   check_time: null | number
   update_time: null | number
 }
