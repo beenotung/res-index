@@ -17,6 +17,7 @@ import { binArray } from '@beenotung/tslib/array.js'
 import { Timer, startTimer } from '@beenotung/tslib/timer.js'
 import { later } from '@beenotung/tslib/async/wait.js'
 import { ProgressCli } from '@beenotung/tslib/progress-cli.js'
+import { query_cache, sql_cache } from '../cache.js'
 
 let pageTitle = 'Dataset'
 let addPageTitle = 'Add Dataset'
@@ -197,6 +198,12 @@ let routes = {
     streaming: false,
     resolve: context =>
       brideToFn(context, sync_with_remote_v2.on_get_last_row_id),
+  },
+  '/dataset/clear-cache': {
+    title: apiEndpointTitle,
+    description: 'get last row id',
+    streaming: false,
+    resolve: context => brideToFn(context, sync_with_remote_v2.on_clear_cache),
   },
 } satisfies Routes
 
@@ -452,6 +459,10 @@ namespace sync_with_remote_v2 {
       await upload_updated_data(i, table)
       await upload_new_data(i, table)
     }
+    await post<typeof on_clear_cache>(
+      toRouteUrl(routes, '/dataset/clear-cache'),
+      {},
+    )
   }
 
   /* for trim_table() */
@@ -541,6 +552,12 @@ namespace sync_with_remote_v2 {
       .pluck()
       .get() as number
     return { last_id: last_id || 0 }
+  }
+
+  /* when the sync is completed */
+  export function on_clear_cache(body: {}) {
+    sql_cache.clear()
+    query_cache.clear()
   }
 }
 

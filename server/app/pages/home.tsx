@@ -14,6 +14,7 @@ import { newDB } from 'better-sqlite3-schema'
 import { DAY } from '@beenotung/tslib/time.js'
 import { Routes } from '../routes.js'
 import { title } from '../../config.js'
+import { QueryCache, SQLCache, query_cache, sql_cache } from '../cache.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -331,19 +332,34 @@ group by npm_package.id
   }
 }
 
+function cached_query<T = unknown>(sql: string, bindings: object): T[] {
+  let sql_index = sql_cache.getIndex(sql)
+  let key = sql_index + ':' + JSON.stringify(bindings)
+  let value = query_cache.get(key)
+  if (!value) {
+    let start_time = Date.now()
+    value = db.prepare<{}, T>(sql).all(bindings)
+    let used_time = Date.now() - start_time
+    query_cache.set({ key, value, used_time })
+  }
+  return value
+}
+
 function Page(attrs: {}, context: SearchContext) {
   let { params, query } = context
   let { prefix } = query
 
-  let matchedItems = db
-    .prepare<{}, MatchedItem>(query.search_repo_sql)
-    .all(query.search_repo_bindings)
+  let matchedItems = cached_query<MatchedItem>(
+    query.search_repo_sql,
+    query.search_repo_bindings,
+  ).slice()
 
   let matchedPackages = query.skip_npm
     ? []
-    : db
-        .prepare<{}, MatchedNpmPackage>(query.search_npm_package_sql)
-        .all(query.search_npm_package_bindings)
+    : cached_query<MatchedNpmPackage>(
+        query.search_npm_package_sql,
+        query.search_npm_package_bindings,
+      )
   for (let npm_package of matchedPackages) {
     // FIXME move to render part to avoid bug when collapsed into prefix pattern?
     let { name, username } = npm_package
