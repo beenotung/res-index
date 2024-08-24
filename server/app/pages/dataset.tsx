@@ -113,6 +113,7 @@ async function post_once(url: string, body: object) {
     headers: {
       'Content-Type': 'application/json',
       'X-Sync-API-Key': config.api_key.sync,
+      'User-Agent': 'res-index dataset sync client',
     },
     body: JSON.stringify(body),
   })
