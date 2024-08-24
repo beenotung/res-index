@@ -1,17 +1,12 @@
-import { filter, find, seedRow, getId, update, del } from 'better-sqlite3-proxy'
-import { Repo, proxy } from './proxy'
+import { filter, find, getId, update, del } from 'better-sqlite3-proxy'
+import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
-import { readdirSync, statSync, writeFileSync } from 'fs'
+import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
-import {
-  hasTypes,
-  npm_package_detail_parser,
-  storeNpmPackage,
-  storeRepo,
-} from './collect'
+import { storeNpmPackage, storeRepo } from './collect'
 import { getLanguageId } from './store'
 import { env } from './env'
 
@@ -20,6 +15,7 @@ import { env } from './env'
 // You can setup the database with initial config and sample data via the db proxy.
 
 function run(fn: () => unknown) {
+  // if (fn != remove_repository_pathname) return
   process.stdout.write(fn.name + '()...')
   console.time(fn.name)
   db.transaction(fn)()
