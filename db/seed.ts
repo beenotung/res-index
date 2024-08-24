@@ -156,69 +156,6 @@ function fix_npm_page_url() {
 }
 run(fix_npm_page_url)
 
-function getNpmPackageLatestVersion(payload: string) {
-  let json = JSON.parse(payload)
-  let pkg = npm_package_detail_parser.parse(json)
-  if (!('versions' in pkg)) return
-  let version_name = pkg['dist-tags']?.latest
-  if (!version_name) return
-  let version = pkg.versions[version_name]
-  return version
-}
-
-function set_npm_package__deprecated() {
-  let rows = db
-    .prepare<void[], { id: number; payload: string }>(
-      /* sql */ `
-select
-  npm_package.id
-, page.payload
-from npm_package
-inner join page on page.id = npm_package.page_id
-where npm_package.deprecated is null
-  and page.payload is not null
-`,
-    )
-    .all()
-  for (let row of rows) {
-    let version = getNpmPackageLatestVersion(row.payload)
-    if (!version) continue
-
-    let deprecated = 'deprecated' in version && version.deprecated != false
-    proxy.npm_package[row.id].deprecated = deprecated
-  }
-}
-run(set_npm_package__deprecated)
-
-function set_npm_package__has_types() {
-  let rows = db
-    .prepare<void[], { id: number; payload: string }>(
-      /* sql */ `
-select
-  npm_package.id
-, page.payload
-from npm_package
-inner join page on page.id = npm_package.page_id
-where npm_package.has_types is null
-  and page.payload is not null
-`,
-    )
-    .all()
-  for (let row of rows) {
-    let version = getNpmPackageLatestVersion(row.payload)
-    if (!version) continue
-
-    let types = version.types
-    if (Array.isArray(types)) {
-      types = types.join()
-    }
-
-    let has_types = hasTypes(version.types) || hasTypes(version.typings)
-    proxy.npm_package[row.id].has_types = has_types
-  }
-}
-run(set_npm_package__has_types)
-
 function fix_npm_download() {
   let prefix = 'https://api.npmjs.org/downloads/point/last-day/'
   let pages = db.query(`select id, url from page where url like '${prefix}%'`)
@@ -399,62 +336,6 @@ where is_public = 1
 `)
 }
 run(check_repo_is_public)
-
-function fix_npm_package_deprecated() {
-  let ids = db
-    .prepare(
-      /* sql */ `
-select
-  npm_package.id
-from npm_package
-inner join page on page.id = npm_package.page_id
-where npm_package.deprecated is null
-  and npm_package.unpublish_time is null
-  and page.payload is not null
-`,
-    )
-    .pluck()
-    .all() as number[]
-  let select = db.prepare(/* sql */ `
-select
-  npm_package.version
-, page.payload
-from npm_package
-inner join page on page.id = npm_package.page_id
-where npm_package.id = :id
-limit 1
-`)
-  let update = db.prepare(/* sql */ `
-update npm_package
-set deprecated = :deprecated
-where id = :id
-`)
-  let n = ids.length
-  let i = 0
-  for (let id of ids) {
-    i++
-    process.stdout.write(`\r fix_npm_package_deprecated progress: ${i}/${n}...`)
-    let row = select.get({ id }) as { version: string; payload: string }
-    let payload = JSON.parse(row.payload)
-    writeFileSync('npm.json', JSON.stringify(payload, null, 2))
-    let pkg = npm_package_detail_parser.parse(payload)
-    if ('error' in pkg) continue
-    if (!('versions' in pkg)) continue
-    let version = pkg.versions[row.version]
-    let deprecated =
-      version && 'deprecated' in version && version.deprecated != false
-    update.run({
-      id,
-      deprecated: deprecated ? 1 : 0,
-    })
-  }
-  process.stdout.write(
-    `\r` +
-      ' '.repeat(` fix_npm_package_deprecated progress: ${i}/${n}...`.length) +
-      '\r',
-  )
-}
-run(fix_npm_package_deprecated)
 
 function fix_relative_npm_package_name() {
   // e.g. fix "../serve-static" to "serve-static"
