@@ -7,7 +7,7 @@ import { GracefulPage } from 'graceful-playwright'
 import { later } from '@beenotung/tslib/async/wait'
 import { NpmPackage, NpmPackageDependency, proxy, Repo } from './proxy'
 import { startTimer } from '@beenotung/tslib/timer'
-import { writeFileSync } from 'fs'
+import { appendFileSync, writeFileSync } from 'fs'
 import {
   ParseResult,
   Parser,
@@ -859,6 +859,7 @@ function saveJSON(filename: string, payload: string) {
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let page = npm_package.page!
   let url = page!.url
+  appendFileSync('log.txt', url + '\n')
   let res = await fetch(url)
   let payload = await res.text()
   let payloadHash = hashString(payload)
