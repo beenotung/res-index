@@ -1,3 +1,6 @@
+import { db } from '../../db/db.js'
+import { Statement } from 'better-sqlite3'
+
 const max_size = 100
 
 export type CacheItem = {
@@ -34,6 +37,10 @@ export class QueryCache {
     let min_time = items[0].used_time
     for (let i = 1; i < max_size; i++) {
       let item = items[i]
+      if (item.key.includes('beeno')) {
+        // always cache
+        continue
+      }
       if (item.used_time < min_time) {
         min_time = item.used_time
         min_index = i
@@ -67,5 +74,21 @@ export class SQLCache {
   }
 }
 
+export class PreparedStatementCache {
+  private cache = new Map<string, Statement>()
+
+  get<BindParameters extends unknown[] | {} = unknown[], Result = unknown>(
+    sql: string,
+  ): Statement<BindParameters, Result> {
+    let statement = this.cache.get(sql)
+    if (!statement) {
+      statement = db.prepare(sql)
+      this.cache.set(sql, statement)
+    }
+    return statement as Statement<BindParameters, Result>
+  }
+}
+
 export let query_cache = new QueryCache()
 export let sql_cache = new SQLCache()
+export let prepared_statement_cache = new PreparedStatementCache()

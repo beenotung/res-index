@@ -1,7 +1,7 @@
 import { o } from '../jsx/jsx.js'
 import SourceCode from '../components/source-code.js'
 import { mapArray } from '../components/fragment.js'
-import { Context, DynamicContext } from '../context.js'
+import { DynamicContext } from '../context.js'
 import Style from '../components/style.js'
 import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
@@ -13,8 +13,7 @@ import { Element } from '../jsx/types.js'
 import { newDB } from 'better-sqlite3-schema'
 import { DAY } from '@beenotung/tslib/time.js'
 import { Routes } from '../routes.js'
-import { title } from '../../config.js'
-import { QueryCache, SQLCache, query_cache, sql_cache } from '../cache.js'
+import { prepared_statement_cache, query_cache, sql_cache } from '../cache.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -338,9 +337,17 @@ function cached_query<T = unknown>(sql: string, bindings: object): T[] {
   let value = query_cache.get(key)
   if (!value) {
     let start_time = Date.now()
-    value = db.prepare<{}, T>(sql).all(bindings)
+    console.log('== sql ==')
+    console.log('key:', key)
+    console.log('bindings:', bindings)
+    console.log('---')
+    console.log(sql)
+    console.log('---')
+    value = prepared_statement_cache.get<{}, T>(sql).all(bindings)
     let used_time = Date.now() - start_time
     query_cache.set({ key, value, used_time })
+    console.log('used time:', used_time)
+    console.log('====')
   }
   return value
 }
