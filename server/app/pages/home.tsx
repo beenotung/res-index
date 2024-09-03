@@ -337,17 +337,17 @@ function cached_query<T = unknown>(sql: string, bindings: object): T[] {
   let value = query_cache.get(key)
   if (!value) {
     let start_time = Date.now()
-    console.log('== sql ==')
+    console.log('== query ==')
     console.log('key:', key)
-    console.log('bindings:', bindings)
-    console.log('---')
-    console.log(sql)
-    console.log('---')
+    // console.log('bindings:', bindings)
+    // console.log('---')
+    // console.log(sql)
+    // console.log('---')
     value = prepared_statement_cache.get<{}, T>(sql).all(bindings)
     let used_time = Date.now() - start_time
     query_cache.set({ key, value, used_time })
     console.log('used time:', used_time)
-    console.log('====')
+    // console.log('====')
   }
   return value
 }
