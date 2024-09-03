@@ -123,7 +123,7 @@ type MatchedItem = {
 }
 
 function build_search_query(params: URLSearchParams) {
-  let action = params.get('action')
+  let action = params.get('form_action')
   let host = params.get('host')
   let username = params.get('username')
   let name = params.get('name')
@@ -481,7 +481,7 @@ function Page(attrs: {}, context: SearchContext) {
   }
   return (
     <form onsubmit="emitForm(event)" id="searchForm">
-      <input name="action" value="search" hidden />
+      <input name="form_action" value="search" hidden />
       <label>
         Repo Host:{' '}
         <input name="host" placeholder="e.g. npmjs" value={query.host} />
