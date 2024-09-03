@@ -37,8 +37,9 @@ export class QueryCache {
     let min_time = items[0].used_time
     for (let i = 1; i < max_size; i++) {
       let item = items[i]
-      if (item.key.includes('beeno')) {
-        // always cache
+      let key = item.key
+      if (key.includes('{}') || key.includes('beeno')) {
+        // always cache hot queries
         continue
       }
       if (item.used_time < min_time) {
