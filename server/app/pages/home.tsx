@@ -450,6 +450,7 @@ function Page(attrs: {}, context: SearchContext) {
     'div#result',
     {},
     [
+      <p id="loadingMessage"></p>,
       prefix ? <p>repo/package prefix: {prefix}*</p> : null,
       <p>{match_count.toLocaleString()} matches</p>,
       <div class="list">
@@ -480,7 +481,10 @@ function Page(attrs: {}, context: SearchContext) {
     throw EarlyTerminate
   }
   return (
-    <form onsubmit="emitForm(event)" id="searchForm">
+    <form
+      id="searchForm"
+      onsubmit="emitForm(event); loadingMessage.textContent='searching...'"
+    >
       <input name="form_action" value="search" hidden />
       <label>
         Repo Host:{' '}
