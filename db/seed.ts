@@ -1,4 +1,4 @@
-import { filter, find, getId, update, del } from 'better-sqlite3-proxy'
+import { filter, find, getId, update, del, count } from 'better-sqlite3-proxy'
 import { proxy } from './proxy'
 import { db } from './db'
 import { cleanRepoUrl, parseRepoUrl } from './format'
@@ -634,3 +634,59 @@ function remove_dot_git_in_repo() {
   }
 }
 run(remove_dot_git_in_repo)
+
+// e.g. fix @angular/cdk/table -> @angular/cdk
+function fix_npm_package_name() {
+  type Row = { id: number; name: string }
+  let rows = db
+    .prepare<void[], Row>(
+      /* sql */ `
+  select id, name from npm_package
+  where name like '%/%/%'
+  `,
+    )
+    .all()
+  for (let row of rows) {
+    let parts = row.name.split('/')
+    parts.pop()
+    let new_name = parts.join('/')
+    let new_npm_package = find(proxy.npm_package, { name: new_name })
+    if (!new_npm_package) {
+      let scope = parts[0].startsWith('@') ? parts[0].slice(1) : undefined
+      let desc = proxy.npm_package[row.id].desc
+      let new_id = storeNpmPackage({ scope, name: new_name, desc })
+      new_npm_package = proxy.npm_package[new_id]
+    }
+    let old_id = row.id
+    let new_id = new_npm_package.id!
+    function move_id<T extends object>(
+      table: T[],
+      filter: Partial<T>,
+      data: Partial<T>,
+    ): void {
+      if (count(table, data)) {
+        del(table, filter)
+      } else {
+        update(table, filter, data)
+      }
+    }
+    move_id(
+      proxy.npm_package_dependency,
+      { dependency_id: old_id },
+      { dependency_id: new_id },
+    )
+    move_id(
+      proxy.npm_package_dependency,
+      { package_id: old_id },
+      { package_id: new_id },
+    )
+    move_id(
+      proxy.npm_package_keyword,
+      { npm_package_id: old_id },
+      { npm_package_id: new_id },
+    )
+    deleteNpmPackage(row.id)
+  }
+}
+
+run(fix_npm_package_name)
