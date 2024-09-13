@@ -388,6 +388,7 @@ namespace sync_with_remote_v2 {
       select count(*) from "${table}" where updated_at >= :last_updated_at
       `,
           )
+          .pluck()
           .get({ last_updated_at }) || 0
       let iter = db
         .prepare<{ last_updated_at: string }, { id: number }>(
