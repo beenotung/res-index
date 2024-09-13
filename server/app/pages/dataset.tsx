@@ -318,24 +318,24 @@ namespace sync_with_remote_v2 {
       // 2. local select new rows
       // 3. remote insert new rows
       cli.update(
-        `upload_new_data (${i}/${n}) ${table}: remote selecting last row id...`,
+        `upload_new_data     (${i}/${n}) ${table}: remote selecting last row id...`,
       )
       let result = await post<typeof on_get_last_row_id>(
         toRouteUrl(routes, '/dataset/last-row-id'),
         { table },
       )
       cli.update(
-        `upload_new_data (${i}/${n}) ${table}: local selecting new rows after id=${result.last_id}...`,
+        `upload_new_data     (${i}/${n}) ${table}: local selecting new rows after id=${result.last_id}...`,
       )
       let { count, iter } = select_new_rows(table, result.last_id)
       cli.update(
-        `upload_new_data (${i}/${n}) ${table}: uploading ${count} new rows...`,
+        `upload_new_data     (${i}/${n}) ${table}: uploading ${count} new rows...`,
       )
       let done = 0
       let failed = 0
       await upload_rows(iter, async buffer => {
         cli.update(
-          `upload_new_data (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${count} new rows (${failed} failed)...`,
+          `upload_new_data     (${i}/${n}) ${table}: uploading ${done + failed + buffer.length}/${count} new rows (${failed} failed)...`,
         )
         let result = await post<typeof on_receive_updated_rows>(
           toRouteUrl(routes, '/dataset/updated-rows'),
@@ -345,7 +345,7 @@ namespace sync_with_remote_v2 {
         failed += result.failed
       })
       cli.update(
-        `upload_new_data (${i}/${n}) ${table}: uploaded ${done} new rows, failed ${failed} rows`,
+        `upload_new_data     (${i}/${n}) ${table}: uploaded ${done} new rows, failed ${failed} rows`,
       )
       cli.nextLine()
     }
