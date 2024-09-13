@@ -188,6 +188,26 @@ function remove_repo_org_page() {
 }
 run(remove_repo_org_page)
 
+// e.g. 'https://github.com/pollenium/'
+// e.g. 'https://github.com/image-charts/'
+function remove_repo_author_page() {
+  let rows = db
+    .prepare<void[], { id: number; url: string }>(
+      /* sql */ `
+  select id, url from repo where url like 'https://github.com/%/'
+  `,
+    )
+    .all()
+  for (let row of rows) {
+    let repo = parseRepoUrl(row.url)
+    if (repo.name) {
+      continue
+    }
+    deleteRepo(row.id)
+  }
+}
+run(remove_repo_author_page)
+
 function deleteRepo(repo_id: number) {
   if (!(repo_id in proxy.repo)) {
     return

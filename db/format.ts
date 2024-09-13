@@ -233,6 +233,13 @@ export function cleanRepoUrl(url: string | null): string | null {
     }
   }
 
+  let repo = parseRepoUrl(url)
+  // e.g. 'https://github.com/pollenium/'
+  // e.g. 'https://github.com/image-charts/
+  if (!repo.name) {
+    throw new Error(`Incomplete repo url: ` + url)
+  }
+
   return url
 }
 
