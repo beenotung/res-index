@@ -849,3 +849,46 @@ let routes = {
 } satisfies Routes
 
 export default { routes }
+
+// TODO apply fts5 extension to speed up searching
+function test() {
+  console.log('[test]')
+
+  db.exec(/* sql */ `
+  drop table if exists repo_fts;
+  `)
+
+  console.time('prepare fts')
+  db.exec(/* sql */ `
+  create virtual table repo_fts using fts5(id,name,desc);
+  `)
+
+  db.exec(/* sql */ `
+  insert into repo_fts(id,name,desc)
+  select id,name,desc from repo;
+  `)
+  console.timeEnd('prepare fts')
+
+  console.time('search with like')
+  db.query(
+    /* sql */ `
+  select id from repo
+  where name like :name
+    and desc like :desc
+  `,
+    { name: '%react%', desc: '%cache%' },
+  )
+  console.timeEnd('search with like')
+
+  console.time('search with fts match')
+  db.query(
+    /* sql */ `
+  select id from repo_fts
+  where name match :name
+    and desc match :desc
+  `,
+    { name: 'react', desc: 'cache' },
+  )
+  console.timeEnd('search with fts match')
+}
+// test()
