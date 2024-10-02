@@ -851,7 +851,9 @@ let routes = {
 export default { routes }
 
 // TODO apply fts5 extension to speed up searching
-function test() {
+// fts can match 'react-pdf' on 'react'
+// but cannot match 'reactjs-pdf-reader' on 'react'
+function fts_test() {
   console.log('[test]')
 
   db.exec(/* sql */ `
@@ -890,5 +892,9 @@ function test() {
     { name: 'react', desc: 'cache' },
   )
   console.timeEnd('search with fts match')
+
+  db.exec(/* sql */ `
+  drop table repo_fts;
+  `)
 }
-// test()
+// fts_test()
