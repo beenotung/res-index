@@ -590,6 +590,7 @@ function build_search_query_test() {
 select name, sql from sqlite_master
 where type = 'table'
   and name not like 'knex%'
+  and name not like 'sqlite_%'
   and name <> 'sqlite_sequence'
 `,
     )
