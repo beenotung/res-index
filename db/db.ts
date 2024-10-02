@@ -30,3 +30,10 @@ db.pragma('cache_size = -250000')
 
 // use memory instead of disk for temporary table during join table
 db.pragma('temp_store = MEMORY')
+
+db.function('reverse', function (input: string | null) {
+  if (input == null) {
+    return null
+  }
+  return input.split('').reverse().join('')
+})

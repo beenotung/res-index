@@ -14,6 +14,51 @@ import { newDB } from 'better-sqlite3-schema'
 import { DAY } from '@beenotung/tslib/time.js'
 import { Routes } from '../routes.js'
 import { prepared_statement_cache, query_cache, sql_cache } from '../cache.js'
+import { writeFileSync } from 'fs'
+
+export function populateFTSIndex() {
+  let count = db.queryFirstCell('select count(*) from repo_fts')
+  if (!count) {
+    db.run(/* sql */ `
+insert into repo_fts (
+  id
+, name
+, name_rev
+, desc
+, desc_rev
+)
+select
+  id
+, name
+, reverse(name)
+, desc
+, reverse(desc)
+from repo
+`)
+  }
+
+  count = db.queryFirstCell('select count(*) from npm_package_fts')
+  if (!count) {
+    db.run(/* sql */ `
+insert into npm_package_fts (
+  id
+, name
+, name_rev
+, desc
+, desc_rev
+)
+select
+  id
+, name
+, reverse(name)
+, desc
+, reverse(desc)
+from npm_package
+`)
+  }
+}
+
+populateFTSIndex()
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -122,7 +167,7 @@ type MatchedItem = {
   deprecated: number | null
 }
 
-function build_search_query(params: URLSearchParams) {
+function build_search_query_v1(params: URLSearchParams) {
   let action = params.get('form_action')
   let host = params.get('host')
   let username = params.get('username')
@@ -329,6 +374,305 @@ group by npm_package.id
     desc,
     prefix,
   }
+}
+
+function build_search_query(params: URLSearchParams) {
+  let action = params.get('form_action')
+  let host = params.get('host')
+  let username = params.get('username')
+  let name = params.get('name')
+  let language = params.get('language')
+  let desc = params.get('desc')
+  let prefix = params.get('prefix')
+
+  let search_repo_bindings: Record<string, string> = {}
+  let search_repo_bind_count = 0
+
+  let search_npm_package_bindings: Record<string, string> = {}
+  let search_npm_package_bind_count = 0
+
+  let search_repo_sql = /* sql */ `
+select
+  repo.name
+, repo.desc
+, repo.url
+, ifnull(
+    programming_language.name,
+    case npm_package.has_types
+      when 1 then 'Typescript'
+      when 0 then 'Javascript'
+    end)
+  as programming_language
+, author.username
+, repo.is_fork
+, npm_package.deprecated
+from repo
+inner join author on author.id = repo.author_id
+inner join domain on domain.id = repo.domain_id
+left join programming_language on programming_language.id = repo.programming_language_id
+left join npm_package on npm_package.repo_id = repo.id
+where repo.is_public = 1
+`
+
+  let search_npm_package_sql = /* sql */ `
+select
+  npm_package.name
+, author.username
+, npm_package.desc
+, npm_package.weekly_downloads
+, case npm_package.has_types
+    when 1 then 'Typescript'
+    when 0 then 'Javascript'
+  end as programming_language
+, npm_package.deprecated
+from npm_package
+left join author on author.id = author_id
+where repo_id is null
+`
+
+  let fts_count = 0
+
+  if (name) {
+    for (let part of name.split(' ')) {
+      part = part.trim()
+      if (!part) continue
+      fts_count++
+      let bind = 'f' + fts_count
+
+      let not = part[0] == '-'
+      if (not) {
+        part = part.slice(1)
+      }
+
+      let full = part.startsWith('"') && part.endsWith('"')
+      if (full) {
+        part = part.slice(1, -1)
+      }
+
+      search_repo_bindings[bind] = part
+      search_npm_package_bindings[bind] = part
+
+      if (full) {
+        let op = not ? '<>' : '='
+
+        search_repo_sql += /* sql */ `
+  and repo.name ${op} :${bind}
+        `
+        search_npm_package_sql += /* sql */ `
+  and npm_package.name ${op} :${bind}
+  `
+
+        continue
+      }
+
+      for (let bindings of [
+        search_repo_bindings,
+        search_npm_package_bindings,
+      ]) {
+        bindings[bind] = part
+        bindings[bind + 'js'] = part + 'js'
+        bindings[bind + 's'] = part + 's'
+      }
+
+      let sub_sql = /* sql */ `(select id from repo_fts
+    where name match :${bind}||'*'
+       or name_rev match reverse(:${bind})||'*'
+       or name match :${bind}js||'*'
+       or name_rev match reverse(:${bind}js)||'*'
+       or name match :${bind}s||'*'
+       or name_rev match reverse(:${bind}s)||'*'
+        )`
+
+      let op = not ? 'not in' : 'in'
+      search_repo_sql += /* sql */ `
+  and repo.id ${op} ${sub_sql}
+      `
+      search_npm_package_sql += /* sql */ `
+  and npm_package.id ${op} ${sub_sql}
+      `
+    }
+  }
+
+  if (prefix) {
+    search_repo_sql += /* sql */ `
+  and repo.name like :prefix
+`
+    search_npm_package_sql += /* sql */ `
+  and npm_package.name like :prefix
+`
+    search_repo_bindings.prefix = prefix.toLowerCase() + '%'
+    search_npm_package_bindings.prefix = prefix.toLowerCase() + '%'
+  }
+
+  // add bindings for search_repo
+  let qs: [string | null, string][] = [
+    [host, 'domain.host'],
+    [username, 'author.username'],
+    // [name, 'repo.name'],
+    [desc, 'repo.desc'],
+  ]
+  for (let [value, field] of qs) {
+    if (value) {
+      for (let part of value.split(' ')) {
+        part = part.trim()
+        if (!part) continue
+        search_repo_bind_count++
+        let bind = 'b' + search_repo_bind_count
+        if (part[0] == '-') {
+          part = part.slice(1)
+          search_repo_sql += /* sql */ `
+  and ${field} not like :${bind}
+`
+        } else {
+          search_repo_sql += /* sql */ `
+  and ${field} like :${bind}
+`
+        }
+        if (part.startsWith('"') && part.endsWith('"')) {
+          search_repo_bindings[bind] = part.slice(1, -1)
+        } else {
+          search_repo_bindings[bind] = '%' + part + '%'
+        }
+      }
+    }
+  }
+
+  // add bindings for search_npm_package
+  qs = [
+    [username, 'author.username'],
+    // [name, 'npm_package.name'],
+    [desc, 'npm_package.desc'],
+  ]
+  for (let [value, field] of qs) {
+    if (value) {
+      for (let part of value.split(' ')) {
+        search_npm_package_bind_count++
+        let bind = 'b' + search_npm_package_bind_count
+        if (part[0] == '-') {
+          part = part.slice(1)
+          search_npm_package_sql += /* sql */ `
+  and ${field} not like :${bind}
+`
+        } else {
+          search_npm_package_sql += /* sql */ `
+  and ${field} like :${bind}
+`
+        }
+        if (part.startsWith('"') && part.endsWith('"')) {
+          search_npm_package_bindings[bind] = part.slice(1, -1)
+        } else {
+          search_npm_package_bindings[bind] = '%' + part + '%'
+        }
+      }
+    }
+  }
+  let skip_npm = false
+  if (host) {
+    let include_npm = false
+    let include_other = false
+    for (let part of host.split(' ')) {
+      part = part.trim()
+      if (!part) continue
+      if (part.startsWith('-npm')) {
+        skip_npm = true
+        break
+      }
+      if (part.startsWith('npm')) {
+        include_npm = true
+        continue
+      }
+      include_other = true
+    }
+    skip_npm ||= include_other && !include_npm
+  }
+
+  // set search bindings for programming languages
+  if (language) {
+    let positive_languages: string[] = []
+    let negative_languages: string[] = []
+    for (let name of language.split(' ')) {
+      if (!name) continue
+      if (name[0] == '-') {
+        name = name.slice(1)
+        negative_languages.push(name)
+      } else {
+        positive_languages.push(name)
+      }
+    }
+    if (positive_languages.length > 0) {
+      search_repo_sql += /* sql */ `
+  and (${positive_languages
+    .map(name => {
+      search_repo_bind_count++
+      let bind = 'b' + search_repo_bind_count
+      search_repo_bindings[bind] = name
+      return `programming_language like :${bind}`
+    })
+    .join(' or ')})
+`
+    }
+    if (negative_languages.length > 0) {
+      for (let name of negative_languages) {
+        search_repo_bind_count++
+        let bind = 'b' + search_repo_bind_count
+        search_repo_bindings[bind] = name
+        search_repo_sql += /* sql */ `
+  and (programming_language not like :${bind} or programming_language is null)
+`
+      }
+    }
+  }
+
+  // avoid duplicated records due to join tables
+  search_repo_sql += /* sql */ `
+group by repo.id
+`
+  search_npm_package_sql += /* sql */ `
+group by npm_package.id
+`
+
+  return {
+    search_repo_sql,
+    search_repo_bindings,
+    skip_npm,
+    search_npm_package_sql,
+    search_npm_package_bindings,
+    /* from params */
+    action,
+    host,
+    username,
+    name,
+    language,
+    desc,
+    prefix,
+  }
+}
+
+if (process.argv[1] == import.meta.filename) {
+  let query = build_search_query(
+    new URLSearchParams({
+      name: 'react',
+    }),
+  )
+
+  writeFileSync('samples/query.json', JSON.stringify(query, null, 2))
+
+  console.time('search repo')
+  let repos = db.prepare(query.search_repo_sql).all(query.search_repo_bindings)
+  console.timeEnd('search repo')
+  console.log('repos:', repos.length)
+  writeFileSync('samples/result-repo.json', JSON.stringify(repos, null, 2))
+
+  console.time('search npm')
+  let npm_packages = db
+    .prepare(query.search_npm_package_sql)
+    .all(query.search_npm_package_bindings)
+  console.timeEnd('search npm')
+  console.log('npm_packages:', npm_packages.length)
+  writeFileSync(
+    'samples/result-npm_package.json',
+    JSON.stringify(npm_packages, null, 2),
+  )
 }
 
 function cached_query<T = unknown>(sql: string, bindings: object): T[] {
@@ -777,7 +1121,7 @@ where type = 'table'
   console.log('all passed')
 }
 if (process.argv[1] == import.meta.filename) {
-  build_search_query_test()
+  // build_search_query_test()
 }
 
 // And it can be pre-rendered into html as well
@@ -897,4 +1241,6 @@ function fts_test() {
   drop table repo_fts;
   `)
 }
-// fts_test()
+if (process.argv[1] == import.meta.filename) {
+  // fts_test()
+}
