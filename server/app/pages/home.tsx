@@ -14,6 +14,7 @@ import { newDB } from 'better-sqlite3-schema'
 import { DAY } from '@beenotung/tslib/time.js'
 import { Routes } from '../routes.js'
 import { prepared_statement_cache, query_cache, sql_cache } from '../cache.js'
+import { compare } from '@beenotung/tslib/compare.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -102,42 +103,18 @@ function autoHideHints() {
 autoHideHints()
 `)
 
-type MatchedNpmPackage = {
-  name: string
-  username: string
-  desc: string | null
-  programming_language: string | null
-  weekly_downloads: number | null
-  deprecated: number | null
-}
-
-type MatchedItem = {
+type SelectedRepo = {
   name: string
   desc: string | null
   url: string
   programming_language: string | null
   username: string
-  weekly_downloads: number | null
   is_fork: number | null
   deprecated: number | null
+  host: string | null
 }
 
-function build_search_query(params: URLSearchParams) {
-  let action = params.get('form_action')
-  let host = params.get('host')
-  let username = params.get('username')
-  let name = params.get('name')
-  let language = params.get('language')
-  let desc = params.get('desc')
-  let prefix = params.get('prefix')
-
-  let search_repo_bindings: Record<string, string> = {}
-  let search_repo_bind_count = 0
-
-  let search_npm_package_bindings: Record<string, string> = {}
-  let search_npm_package_bind_count = 0
-
-  let search_repo_sql = /* sql */ `
+let select_repo = db.prepare<void[], SelectedRepo>(/* sql */ `
 select
   repo.name
 , repo.desc
@@ -152,15 +129,25 @@ select
 , author.username
 , repo.is_fork
 , npm_package.deprecated
+, domain.host
 from repo
 inner join author on author.id = repo.author_id
 inner join domain on domain.id = repo.domain_id
 left join programming_language on programming_language.id = repo.programming_language_id
 left join npm_package on npm_package.repo_id = repo.id
 where repo.is_public = 1
-`
+`)
 
-  let search_npm_package_sql = /* sql */ `
+type SelectedNpmPackage = {
+  name: string
+  username: string
+  desc: string | null
+  weekly_downloads: number | null
+  programming_language: string | null
+  deprecated: number | null
+}
+
+let select_npm_package = db.prepare<void[], SelectedNpmPackage>(/* sql */ `
 select
   npm_package.name
 , author.username
@@ -174,81 +161,65 @@ select
 from npm_package
 left join author on author.id = author_id
 where repo_id is null
-`
+`)
 
-  if (prefix) {
-    search_repo_sql += /* sql */ `
-  and repo.name like :prefix
-`
-    search_npm_package_sql += /* sql */ `
-  and npm_package.name like :prefix
-`
-    search_repo_bindings.prefix = prefix.toLowerCase() + '%'
-    search_npm_package_bindings.prefix = prefix.toLowerCase() + '%'
+type ResItem = {
+  /* for filtering */
+  sortKey: string
+  host: string | null
+  /* for display */
+  name: string
+  desc: string | null
+  url: string
+  programming_language: string | null
+  username: string
+  weekly_downloads: number | null
+  is_fork: number | null
+  deprecated: number | null
+}
+
+function select_all(): ResItem[] {
+  let items: ResItem[] = []
+
+  let repos = select_repo.all()
+  for (let repo of repos) {
+    items.push(
+      Object.assign(repo, {
+        weekly_downloads: null,
+        sortKey: repo.name.toLowerCase(),
+      }),
+    )
   }
 
-  // add bindings for search_repo
-  let qs: [string | null, string][] = [
-    [host, 'domain.host'],
-    [username, 'author.username'],
-    [name, 'repo.name'],
-    [desc, 'repo.desc'],
-  ]
-  for (let [value, field] of qs) {
-    if (value) {
-      for (let part of value.split(' ')) {
-        part = part.trim()
-        if (!part) continue
-        search_repo_bind_count++
-        let bind = 'b' + search_repo_bind_count
-        if (part[0] == '-') {
-          part = part.slice(1)
-          search_repo_sql += /* sql */ `
-  and ${field} not like :${bind}
-`
-        } else {
-          search_repo_sql += /* sql */ `
-  and ${field} like :${bind}
-`
-        }
-        if (part.startsWith('"') && part.endsWith('"')) {
-          search_repo_bindings[bind] = part.slice(1, -1)
-        } else {
-          search_repo_bindings[bind] = '%' + part + '%'
-        }
-      }
-    }
+  let npm_packages = select_npm_package.all()
+  for (let npm_package of npm_packages) {
+    items.push(
+      Object.assign(npm_package, {
+        url: `https://www.npmjs.com/package/${npm_package.name}`,
+        is_fork: null,
+        sortKey: npm_package.name.toLowerCase(),
+        host: 'www.npmjs.com',
+      }),
+    )
   }
 
-  // add bindings for search_npm_package
-  qs = [
-    [username, 'author.username'],
-    [name, 'npm_package.name'],
-    [desc, 'npm_package.desc'],
-  ]
-  for (let [value, field] of qs) {
-    if (value) {
-      for (let part of value.split(' ')) {
-        search_npm_package_bind_count++
-        let bind = 'b' + search_npm_package_bind_count
-        if (part[0] == '-') {
-          part = part.slice(1)
-          search_npm_package_sql += /* sql */ `
-  and ${field} not like :${bind}
-`
-        } else {
-          search_npm_package_sql += /* sql */ `
-  and ${field} like :${bind}
-`
-        }
-        if (part.startsWith('"') && part.endsWith('"')) {
-          search_npm_package_bindings[bind] = part.slice(1, -1)
-        } else {
-          search_npm_package_bindings[bind] = '%' + part + '%'
-        }
-      }
-    }
-  }
+  return items
+}
+
+let allItems = select_all()
+allItems.sort((a, b) => compare(a.sortKey, b.sortKey))
+
+function build_search_query(params: URLSearchParams) {
+  let action = params.get('form_action')
+  let host = params.get('host')
+  let username = params.get('username')
+  let name = params.get('name')
+  let language = params.get('language')
+  let desc = params.get('desc')
+  let prefix = params.get('prefix')
+
+  let matchedItems = allItems
+
   let skip_npm = false
   if (host) {
     let include_npm = false
@@ -269,57 +240,95 @@ where repo_id is null
     skip_npm ||= include_other && !include_npm
   }
 
-  // set search bindings for programming languages
-  if (language) {
-    let positive_languages: string[] = []
-    let negative_languages: string[] = []
-    for (let name of language.split(' ')) {
-      if (!name) continue
-      if (name[0] == '-') {
-        name = name.slice(1)
-        negative_languages.push(name)
-      } else {
-        positive_languages.push(name)
+  function search() {
+    if (prefix) {
+      let pattern = prefix.toLowerCase()
+      matchedItems = matchedItems.filter(item =>
+        item.sortKey.startsWith(pattern),
+      )
+    }
+
+    searchField(host, item => item.host)
+    searchField(username, item => item.username)
+    searchField(name, item => item.name)
+    searchField(desc, item => item.desc)
+
+    searchLanguage()
+
+    return matchedItems
+  }
+
+  function searchField(
+    value: string | null | undefined,
+    viewFn: (item: ResItem) => string | null,
+  ) {
+    if (!value) return
+    for (let part of value.split(' ')) {
+      part = part.trim()
+      if (!part) continue
+
+      let not = part[0] == '-'
+      if (not) {
+        part = part.slice(1)
       }
+
+      let full = part.startsWith('"') && part.endsWith('"')
+      if (full) {
+        part = part.slice(1, -1)
+      }
+
+      part = part.toLowerCase()
+
+      matchedItems = matchedItems.filter(item => {
+        let value = viewFn(item)?.toLowerCase()
+        let matched = full ? value == part : value && value.includes(part)
+        return not ? !matched : matched
+      })
     }
-    if (positive_languages.length > 0) {
-      search_repo_sql += /* sql */ `
-  and (${positive_languages
-    .map(name => {
-      search_repo_bind_count++
-      let bind = 'b' + search_repo_bind_count
-      search_repo_bindings[bind] = name
-      return `programming_language like :${bind}`
-    })
-    .join(' or ')})
-`
-    }
-    if (negative_languages.length > 0) {
-      for (let name of negative_languages) {
-        search_repo_bind_count++
-        let bind = 'b' + search_repo_bind_count
-        search_repo_bindings[bind] = name
-        search_repo_sql += /* sql */ `
-  and (programming_language not like :${bind} or programming_language is null)
-`
+  }
+
+  function searchLanguage() {
+    if (language) {
+      let positive_languages: string[] = []
+      let negative_languages: string[] = []
+      for (let name of language.split(' ')) {
+        if (!name) continue
+
+        let target: string[]
+        let not = name[0] == '-'
+        if (not) {
+          name = name.slice(1)
+          target = negative_languages
+        } else {
+          target = positive_languages
+        }
+
+        name = name.toLowerCase()
+        if (name == 'js') {
+          name = 'javascript'
+        } else if (name == 'ts') {
+          name = 'typescript'
+        }
+
+        target.push(name)
+      }
+
+      for (let language of positive_languages) {
+        matchedItems = matchedItems.filter(item =>
+          item.programming_language?.toLowerCase().includes(language),
+        )
+      }
+      for (let language of negative_languages) {
+        matchedItems = matchedItems.filter(
+          item => !item.programming_language?.toLowerCase().includes(language),
+        )
       }
     }
   }
 
-  // avoid duplicated records due to join tables
-  search_repo_sql += /* sql */ `
-group by repo.id
-`
-  search_npm_package_sql += /* sql */ `
-group by npm_package.id
-`
-
   return {
-    search_repo_sql,
-    search_repo_bindings,
+    search,
     skip_npm,
-    search_npm_package_sql,
-    search_npm_package_bindings,
     /* from params */
     action,
     host,
@@ -356,46 +365,17 @@ function Page(attrs: {}, context: SearchContext) {
   let { params, query } = context
   let { prefix } = query
 
-  let matchedItems = cached_query<MatchedItem>(
-    query.search_repo_sql,
-    query.search_repo_bindings,
-  ).slice()
-
-  let matchedPackages = query.skip_npm
-    ? []
-    : cached_query<MatchedNpmPackage>(
-        query.search_npm_package_sql,
-        query.search_npm_package_bindings,
-      )
-  for (let npm_package of matchedPackages) {
-    // FIXME move to render part to avoid bug when collapsed into prefix pattern?
-    let { name, username } = npm_package
-    if (!username && name.startsWith('@')) {
-      username = name.split('/')[0].substring(1)
-      npm_package.username = username
-    }
-    matchedItems.push({
-      name,
-      desc: npm_package.desc,
-      url: `https://www.npmjs.com/package/${npm_package.name}`,
-      programming_language: npm_package.programming_language,
-      username,
-      weekly_downloads: npm_package.weekly_downloads,
-      is_fork: null,
-      deprecated: npm_package.deprecated,
-    })
-  }
-
+  let matchedItems = query.search()
   let match_count = matchedItems.length
 
   type Match =
-    | { type: 'item'; item: MatchedItem; sortKey: string }
+    | { type: 'item'; item: ResItem; sortKey: string }
     | { type: 'group'; group: Group; sortKey: string }
   let matches: Match[]
 
   type Group = {
     prefix: string
-    resItems: MatchedItem[]
+    resItems: ResItem[]
   }
 
   let total_match_threshold = 36
@@ -565,7 +545,7 @@ function Page(attrs: {}, context: SearchContext) {
   )
 }
 
-function MatchedItem(res: MatchedItem) {
+function MatchedItem(res: ResItem) {
   let { desc, programming_language } = res
   return (
     <div class="res">
@@ -584,36 +564,7 @@ function MatchedItem(res: MatchedItem) {
 }
 
 function build_search_query_test() {
-  let schema = db
-    .prepare<void[], { name: string; sql: string }>(
-      /* sql */ `
-select name, sql from sqlite_master
-where type = 'table'
-  and name not like 'knex%'
-  and name not like 'sqlite_%'
-  and name <> 'sqlite_sequence'
-`,
-    )
-    .all()
-
-  let testDB = newDB({
-    memory: true,
-    migrate: false,
-  })
-  for (let row of schema) {
-    testDB.prepare(row.sql).run()
-  }
-
-  function seedTable(table: string, field: string, value: string) {
-    let id = testDB.queryFirstCell(
-      `select id from ${table} where ${field} = ?`,
-      value,
-    )
-    if (!id) {
-      id = testDB.insert(table, { [field]: value })
-    }
-    return id
-  }
+  allItems = []
 
   function seedRepo(id: number, url: string, programming_language: string) {
     // e.g. [ 'https:', '', 'github.com', 'beenotung', 'create-ts-liveview' ]
@@ -621,25 +572,7 @@ where type = 'table'
     let host = parts[2]
     let username = parts[3]
     let name = parts[4]
-    testDB.insert('page', {
-      id,
-      url,
-    })
-    testDB.insert('repo', {
-      id,
-      page_id: id,
-      domain_id: seedTable('domain', 'host', host),
-      author_id: seedTable('author', 'username', username),
-      programming_language_id: seedTable(
-        'programming_language',
-        'name',
-        programming_language,
-      ),
-      is_public: 1,
-      name,
-      url,
-    })
-    return {
+    let item: ResItem = {
       name,
       desc: null,
       url,
@@ -647,7 +580,12 @@ where type = 'table'
       username,
       is_fork: null,
       deprecated: null,
+      host,
+      sortKey: name.toLowerCase(),
+      weekly_downloads: null,
     }
+    allItems.push(item)
+    return item
   }
   let samples = [
     seedRepo(
@@ -685,9 +623,7 @@ where type = 'table'
   function test(name: string, params: URLSearchParams, expected: any[]) {
     let query = build_search_query(params)
 
-    let actual = testDB
-      .prepare(query.search_repo_sql)
-      .all(query.search_repo_bindings)
+    let actual = query.search()
 
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
       console.error('[fail]', name, {
