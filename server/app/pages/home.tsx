@@ -353,98 +353,11 @@ function cached_query<T = unknown>(sql: string, bindings: object): T[] {
 }
 
 function Page(attrs: {}, context: SearchContext) {
-  let { params, query } = context
-  let { prefix } = query
+  let { params } = context
 
-  let matchedItems = cached_query<MatchedItem>(
-    query.search_repo_sql,
-    query.search_repo_bindings,
-  ).slice()
+  let query = context.query as any as ReturnType<typeof search_v2>
 
-  let matchedPackages = query.skip_npm
-    ? []
-    : cached_query<MatchedNpmPackage>(
-        query.search_npm_package_sql,
-        query.search_npm_package_bindings,
-      )
-  for (let npm_package of matchedPackages) {
-    // FIXME move to render part to avoid bug when collapsed into prefix pattern?
-    let { name, username } = npm_package
-    if (!username && name.startsWith('@')) {
-      username = name.split('/')[0].substring(1)
-      npm_package.username = username
-    }
-    matchedItems.push({
-      name,
-      desc: npm_package.desc,
-      url: `https://www.npmjs.com/package/${npm_package.name}`,
-      programming_language: npm_package.programming_language,
-      username,
-      weekly_downloads: npm_package.weekly_downloads,
-      is_fork: null,
-      deprecated: npm_package.deprecated,
-    })
-  }
-
-  let match_count = matchedItems.length
-
-  type Match =
-    | { type: 'item'; item: MatchedItem; sortKey: string }
-    | { type: 'group'; group: Group; sortKey: string }
-  let matches: Match[]
-
-  type Group = {
-    prefix: string
-    resItems: MatchedItem[]
-  }
-
-  let total_match_threshold = 36
-  let group_match_threshold = 5
-  if (match_count > total_match_threshold) {
-    let prefix_length = prefix ? prefix.length + 1 : 1
-    let groupDict: Record<string, Group> = {}
-    for (let repo of matchedItems) {
-      let prefix = repo.name.slice(0, prefix_length).toLowerCase()
-      let group = groupDict[prefix]
-      if (!group) {
-        group = { prefix, resItems: [repo] }
-        groupDict[prefix] = group
-      } else {
-        group.resItems.push(repo)
-      }
-    }
-    matches = Object.values(groupDict).map(group => ({
-      type: 'group',
-      group,
-      sortKey: group.prefix.toLowerCase(),
-    }))
-  } else {
-    matches = matchedItems.map(item => ({
-      type: 'item',
-      item,
-      sortKey: item.name.toLowerCase(),
-    }))
-  }
-  matches = matches
-    .flatMap((match): Match[] | Match => {
-      if (
-        match.type != 'group' ||
-        match.group.resItems.length > group_match_threshold
-      )
-        return match
-      return match.group.resItems.map(item => ({
-        type: 'item',
-        item,
-        sortKey: item.name,
-      }))
-    })
-    .sort((a, b) => {
-      if (a.type == 'group' && b.type != 'group') return +1
-      if (a.type != 'group' && b.type == 'group') return -1
-      if (a.sortKey < b.sortKey) return -1
-      if (a.sortKey > b.sortKey) return +1
-      return 0
-    })
+  let { match_count, prefix, results } = query
 
   let result: Element = [
     'div#result',
@@ -454,17 +367,14 @@ function Page(attrs: {}, context: SearchContext) {
       prefix ? <p>repo/package prefix: {prefix}*</p> : null,
       <p>{match_count.toLocaleString()} matches</p>,
       <div class="list">
-        {mapArray(matches, match => {
+        {mapArray(results, match => {
           if (match.type == 'item') {
             return MatchedItem(match.item)
           }
           let {
-            group: { prefix, resItems: repos },
+            group: { prefix, rows: repos },
           } = match
           let count = repos.length
-          if (count == 1) {
-            return MatchedItem(repos[0])
-          }
           params.set('prefix', prefix)
           let href = '/?' + params
           return (
@@ -777,7 +687,297 @@ where type = 'table'
   console.log('all passed')
 }
 if (process.argv[1] == import.meta.filename) {
-  build_search_query_test()
+  // build_search_query_test()
+}
+
+function search_v1(params: URLSearchParams) {
+  let query = build_search_query(params)
+
+  console.time('query repo')
+  db.prepare(query.search_repo_sql).all(query.search_repo_bindings)
+  console.timeEnd('query repo')
+
+  console.time('query npm_package')
+  db.prepare(query.search_npm_package_sql).all(
+    query.search_npm_package_bindings,
+  )
+  console.timeEnd('query npm_package')
+}
+
+function search_v2(params: URLSearchParams) {
+  let action = params.get('form_action')
+  let host = params.get('host')
+  let username = params.get('username')
+  let name = params.get('name')
+  let language = params.get('language')
+  let desc = params.get('desc')
+  let prefix = params.get('prefix')
+
+  type ResultRow = { id: number; name: string }
+
+  let search_repo_sql = /* sql */ `
+select
+  repo.id
+, repo.name
+from repo
+where repo.is_public = 1
+`
+
+  let search_npm_package_sql = /* sql */ `
+select
+  npm_package.id
+, npm_package.name
+from npm_package
+where repo_id is null
+`
+
+  let bindings: Record<string, string> = {}
+  let bind_count = 0
+
+  function searchField(
+    field: string,
+    value: string | null,
+    table: 'repo' | 'npm_package' | 'both',
+  ) {
+    if (!value) return
+    for (let part of value.split(' ')) {
+      part = part.trim()
+      if (!part) continue
+      bind_count++
+      let bind = 'b' + bind_count
+
+      let not = part[0] == '-'
+      if (not) {
+        part = part.slice(1)
+      }
+
+      let full = part.startsWith('"') && part.endsWith('"')
+      if (full) {
+        part = part.slice(1, -1)
+      }
+
+      let op: string
+      if (full) {
+        op = not ? '<>' : '='
+      } else {
+        op = not ? 'not like' : 'like'
+        part = '%' + part + '%'
+      }
+
+      bindings[bind] = '%' + part + '%'
+
+      let sql = /* sql */ `
+  and ${field} ${op} :${bind}
+        `
+      if (table == 'repo' || table == 'both') {
+        search_repo_sql += sql
+      }
+      if (table == 'npm_package' || table == 'both') {
+        search_npm_package_sql += sql
+      }
+    }
+  }
+
+  if (prefix) {
+    search_repo_sql += /* sql */ `
+  and repo.name like :prefix
+`
+    search_npm_package_sql += /* sql */ `
+  and npm_package.name like :prefix
+`
+    bindings.prefix = prefix.toLowerCase() + '%'
+  }
+
+  searchField('name', name, 'both')
+  searchField('desc', desc, 'both')
+
+  console.time('query repo')
+  let repo_rows = db.prepare<{}, ResultRow>(search_repo_sql).all(bindings)
+  console.timeEnd('query repo')
+
+  console.time('query npm_package')
+  let npm_package_rows = db
+    .prepare<{}, ResultRow>(search_npm_package_sql)
+    .all(bindings)
+  console.timeEnd('query npm_package')
+
+  function filterField(fn: () => boolean) {}
+
+  let match_count = repo_rows.length + npm_package_rows.length
+
+  type MixedRow = { type: 'repo' | 'npm_package'; row: ResultRow }
+
+  type Match =
+    | { type: 'item'; item: MixedRow; sortKey: string }
+    | { type: 'group'; group: Group; sortKey: string }
+
+  type Result =
+    | { type: 'item'; item: MatchedItem }
+    | { type: 'group'; group: Group }
+
+  type Group = {
+    prefix: string
+    rows: MixedRow[]
+  }
+
+  let matches: Match[]
+
+  let total_match_threshold = 36
+  let group_match_threshold = 5
+
+  let groupDict: Record<string, Group> = {}
+  let prefix_length = prefix ? prefix.length + 1 : 1
+  for (let row of repo_rows) {
+    let prefix = row.name.slice(0, prefix_length).toLowerCase()
+    let group = groupDict[prefix]
+    if (!group) {
+      group = { prefix, rows: [{ type: 'repo', row }] }
+      groupDict[prefix] = group
+    } else {
+      group.rows.push({ type: 'repo', row })
+    }
+  }
+  for (let row of npm_package_rows) {
+    let prefix = row.name.slice(0, prefix_length).toLowerCase()
+    let group = groupDict[prefix]
+    if (!group) {
+      group = { prefix, rows: [{ type: 'npm_package', row }] }
+      groupDict[prefix] = group
+    } else {
+      group.rows.push({ type: 'npm_package', row })
+    }
+  }
+
+  matches = Object.values(groupDict)
+    .flatMap((group): Match[] | Match => {
+      if (group.rows.length > group_match_threshold) {
+        return { type: 'group', group, sortKey: group.prefix }
+      } else {
+        return group.rows.map(item => ({
+          type: 'item',
+          item,
+          sortKey: item.row.name,
+        }))
+      }
+    })
+    .sort((a, b) => {
+      if (a.type == 'group' && b.type != 'group') return +1
+      if (a.type != 'group' && b.type == 'group') return -1
+      if (a.sortKey < b.sortKey) return -1
+      if (a.sortKey > b.sortKey) return +1
+      return 0
+    })
+
+  let select_repo = db.prepare<
+    number,
+    {
+      name: string
+      desc: string
+      url: string
+      programming_language: string
+      username: string
+      is_fork: number
+      deprecated: number
+    }
+  >(/* sql */ `
+select
+  repo.name
+, repo.desc
+, repo.url
+, ifnull(
+    programming_language.name,
+    case npm_package.has_types
+      when 1 then 'Typescript'
+      when 0 then 'Javascript'
+    end)
+  as programming_language
+, author.username
+, repo.is_fork
+, npm_package.deprecated
+from repo
+inner join author on author.id = repo.author_id
+inner join domain on domain.id = repo.domain_id
+left join programming_language on programming_language.id = repo.programming_language_id
+left join npm_package on npm_package.repo_id = repo.id
+where repo.id = ?
+`)
+
+  let select_npm_package = db.prepare<
+    number,
+    {
+      name: string
+      username: string
+      desc: string
+      weekly_downloads: number
+      programming_language: string
+      deprecated: number
+    }
+  >(/* sql */ `
+select
+  npm_package.name
+, author.username
+, npm_package.desc
+, npm_package.weekly_downloads
+, case npm_package.has_types
+    when 1 then 'Typescript'
+    when 0 then 'Javascript'
+  end as programming_language
+, npm_package.deprecated
+from npm_package
+left join author on author.id = author_id
+where npm_package.id = ?
+`)
+
+  let results: Result[] = matches.map((match): Result => {
+    if (match.type == 'group') return match
+    let { type, row } = match.item
+    if (type == 'repo') {
+      // repo
+      let repo = select_repo.get(row.id)!
+      return {
+        type: 'item',
+        item: Object.assign(repo, {
+          weekly_downloads: null,
+        }),
+      }
+    } else {
+      // npm_package
+      let npm_package = select_npm_package.get(row.id)!
+      return {
+        type: 'item',
+        item: Object.assign(npm_package, {
+          url: `https://www.npmjs.com/package/${npm_package.name}`,
+          is_fork: null,
+        }),
+      }
+    }
+  })
+
+  return {
+    match_count,
+    results,
+    /* from params */
+    action,
+    host,
+    username,
+    name,
+    language,
+    desc,
+    prefix,
+  }
+}
+
+function speed_test() {
+  let params = new URLSearchParams({
+    // username: 'beeno',
+    name: 'react',
+  })
+  console.time('search')
+  search_v2(params)
+  console.timeEnd('search')
+}
+if (process.argv[1] == import.meta.filename) {
+  speed_test()
 }
 
 // And it can be pre-rendered into html as well
@@ -803,11 +1003,12 @@ let routes = {
     menuText: 'Search',
     resolve(context) {
       let params = new URLSearchParams(context.routerMatch?.search)
-      let query = build_search_query(params)
+      // let query = build_search_query(params)
+      let query = search_v2(params)
 
       let ctx = context as SearchContext
       ctx.params = params
-      ctx.query = query
+      ctx.query = query as any
 
       function getTitle() {
         let acc = ''
