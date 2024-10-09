@@ -1135,6 +1135,15 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         }
       }
       for (let name of names) {
+        // check for invalid dep name with space
+        if (name.includes(' ')) {
+          // skip malicious dep name
+          if (name.match(/on[\w]+=/)) {
+            // e.g. "abcd" &gt;onmouseover=alert(1)\" by the package "ljon-r2-test-2"
+            continue
+          }
+          throw new Error('invalid dependency name: ' + name)
+        }
         let dependency_package_id = storeNpmPackage({ name })
         find(proxy.npm_package_dependency, {
           package_id: npm_package_id,

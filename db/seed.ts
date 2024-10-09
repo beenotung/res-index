@@ -15,10 +15,8 @@ import { startTimer } from '@beenotung/tslib/timer'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
-let timer = startTimer('init')
-
 function run(fn: () => unknown) {
-  if (fn != fix_npm_package_name_with_version) return
+  if (fn != remove_malicious_package) return
   process.stdout.write(fn.name + '()...')
   console.time(fn.name)
   db.transaction(fn)()
@@ -723,7 +721,7 @@ run(fix_npm_package_name_with_path)
 
 // e.g. _yargs-parser@7.0.0@yargs-parser -> yargs-parser
 function fix_npm_package_name_with_version() {
-  timer.next('scan npm_package with version in name')
+  let timer = startTimer('scan npm_package with version in name')
   let rows = db
     .prepare<void[], NameRow>(
       /* sql */ `
@@ -740,7 +738,29 @@ where name like '_%@%@%'
     rename_npm_package(row, new_name)
     timer.tick()
   }
+  timer.end()
 }
 run(fix_npm_package_name_with_version)
 
-timer.end()
+function remove_malicious_package() {
+  let rows = db
+    .prepare<void[], NameRow>(
+      /* sql */ `
+select id, name from npm_package
+where name like '%on%=%'
+`,
+    )
+    .all()
+  for (let row of rows) {
+    if (!row.name.match(/on[\w]+=/)) {
+      continue
+    }
+    console.log()
+    console.log('remove malicious npm_package:', row)
+    del(proxy.npm_package_keyword, { npm_package_id: row.id })
+    del(proxy.npm_package_dependency, { package_id: row.id })
+    del(proxy.npm_package_dependency, { dependency_id: row.id })
+    deleteNpmPackage(row.id)
+  }
+}
+run(remove_malicious_package)

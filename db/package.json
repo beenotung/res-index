@@ -15,6 +15,7 @@
     "gen-migrate": "auto-migrate ../data/db.sqlite3 < erd.txt",
     "migrate": "knex migrate:latest",
     "seed": "ts-node seed.ts",
+    "ui": "erd-ui",
     "gen-proxy": "erd-to-proxy < erd.txt > proxy.ts"
   },
   "dependencies": {
