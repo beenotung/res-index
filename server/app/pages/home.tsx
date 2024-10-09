@@ -379,6 +379,22 @@ function Page(attrs: {}, context: SearchContext) {
   let matchedItems = query.search()
   let match_count = matchedItems.length
 
+  let languageCounts: Record<string, number> = {}
+  for (let item of matchedItems) {
+    let name = item.programming_language
+    if (!name) continue
+    let count = languageCounts[name] || 0
+    languageCounts[name] = count + 1
+  }
+  let languageOptions = mapArray(
+    Object.entries(languageCounts).sort((a, b) => b[1] - a[1]),
+    ([name, count]) => (
+      <option value={name}>
+        {name} ({count})
+      </option>
+    ),
+  )
+
   type Match =
     | { type: 'item'; item: ResItem; sortKey: string }
     | { type: 'group'; group: Group; sortKey: string }
@@ -469,6 +485,11 @@ function Page(attrs: {}, context: SearchContext) {
   ]
   if (query.action == 'search' && context.type == 'ws') {
     context.ws.send(['update', nodeToVNode(result, context)])
+    context.ws.send([
+      'update-in',
+      '#languageSelect',
+      nodeToVNode(languageOptions, context),
+    ])
     throw EarlyTerminate
   }
   return (
@@ -498,13 +519,25 @@ function Page(attrs: {}, context: SearchContext) {
           value={query.name}
         />
       </label>
-      <label>
+      <label style="width: fit-content">
         Programming Languages:{' '}
         <input
           name="language"
           placeholder={'e.g. typescript javascript'}
           value={query.language}
         />
+        <br />
+        <details>
+          <summary>Counts by language</summary>
+          <select
+            style="width: 100%;"
+            multiple
+            oninput="searchForm.language.value=Array.from(this.selectedOptions,option=>option.value).join(' ')"
+            id="languageSelect"
+          >
+            {languageOptions}
+          </select>
+        </details>
       </label>
       <label>
         Description:{' '}
