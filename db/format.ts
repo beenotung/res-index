@@ -237,6 +237,9 @@ export function cleanRepoUrl(url: string | null): string | null {
   // e.g. 'https://github.com/pollenium/'
   // e.g. 'https://github.com/image-charts/
   if (!repo.name) {
+    if (url.startsWith('https://github.com/')) {
+      return null
+    }
     throw new Error(`Incomplete repo url: ` + url)
   }
 
