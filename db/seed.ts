@@ -9,10 +9,13 @@ import { execSync } from 'child_process'
 import { storeNpmPackage, storeRepo } from './collect'
 import { getLanguageId } from './store'
 import { env } from './env'
+import { startTimer } from '@beenotung/tslib/timer'
 
 // This file serve like the knex seed file.
 //
 // You can setup the database with initial config and sample data via the db proxy.
+
+let timer = startTimer('init')
 
 function run(fn: () => unknown) {
   if (fn != fix_npm_package_name_with_version) return
@@ -720,19 +723,24 @@ run(fix_npm_package_name_with_path)
 
 // e.g. _yargs-parser@7.0.0@yargs-parser -> yargs-parser
 function fix_npm_package_name_with_version() {
-  type Row = { id: number; name: string }
+  timer.next('scan npm_package with version in name')
   let rows = db
-    .prepare<void[], Row>(
+    .prepare<void[], NameRow>(
       /* sql */ `
 select id, name from npm_package
 where name like '_%@%@%'
 `,
     )
     .all()
+  timer.next('rename npm_packages')
+  timer.setEstimateProgress(rows.length)
   for (let row of rows) {
     let parts = row.name.split('@')
     let new_name = parts.pop()!
     rename_npm_package(row, new_name)
+    timer.tick()
   }
 }
 run(fix_npm_package_name_with_version)
+
+timer.end()
