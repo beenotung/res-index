@@ -1113,6 +1113,11 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
           let new_name = name.replace('../', '')
           deps[new_name] = deps[name]
           delete deps[name]
+          continue
+        }
+        let parts = name.split('@')
+        if (parts.length > 2) {
+          throw new Error('invalid dependency name: ' + name)
         }
       }
       let names = Object.keys(deps)
