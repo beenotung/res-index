@@ -222,6 +222,17 @@ function select_all(): ResItem[] {
 let allItems = select_all()
 allItems.sort((a, b) => compare(a.sortKey, b.sortKey))
 
+function remove_unused_items() {
+  allItems = allItems.filter(item => {
+    if (item.name == '-' || item.name == '~') {
+      return false
+    }
+    return true
+  })
+}
+
+remove_unused_items()
+
 if (env.NODE_ENV == 'export' && import.meta.filename == process.argv[1]) {
   writeJsonFileSync(all_file, allItems)
 }
