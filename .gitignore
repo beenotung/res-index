@@ -36,3 +36,4 @@ data/*.tmp.*
 data/*.sql
 *.zst
 samples/
+data/all.json

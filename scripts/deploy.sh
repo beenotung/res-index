@@ -8,6 +8,7 @@ if [ -z "$MODE" ]; then
   echo "possible mode:"
   echo "  [f] first   (start new pm2 process)"
   echo "  [q] quick   (for UI-only updates)"
+  echo "  [d] data    (for data/all.json)"
   echo "  [ ] default (install dependencies and run database migration)"
   read -p "mode: " MODE
 fi
@@ -63,6 +64,11 @@ else
       mkdir -p data
     "
     pm2_cmd="cd $root_dir && pm2 start --name $pm2_name dist/server/index.js"
+  elif [ "$MODE" == "data" ]; then
+    NODE_ENV=export node dist/server/app/pages/home.js
+    rsync -SavLPz \
+      data/all.json \
+      "$user@$host:$root_dir/data"
   else
     pm2_cmd="pm2 reload $pm2_name"
   fi

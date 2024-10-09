@@ -451,8 +451,11 @@ namespace sync_with_remote_v2 {
     let i = 0
     for (let table of tables_atom_last) {
       i++
-      // await trim_table(i, table)
-      await delete_removed_data(i, table)
+      await trim_table(i, table)
+      // await delete_removed_data(i, table)
+    }
+    if ('use exported data') {
+      return
     }
     i = 0
     for (let table of tables_atom_first) {

@@ -15,6 +15,9 @@ import { DAY } from '@beenotung/tslib/time.js'
 import { Routes } from '../routes.js'
 import { prepared_statement_cache, query_cache, sql_cache } from '../cache.js'
 import { compare } from '@beenotung/tslib/compare.js'
+import { env } from '../../../db/env.js'
+import { readFileSync, writeFileSync } from 'fs'
+import { readJsonFileSync, writeJsonFileSync } from '@beenotung/tslib/fs.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -178,8 +181,18 @@ type ResItem = {
   deprecated: number | null
 }
 
+let all_file = 'data/all.json'
+
 function select_all(): ResItem[] {
   let items: ResItem[] = []
+
+  if (env.NODE_ENV != 'export') {
+    items = readJsonFileSync(all_file)
+    if (!(items.length > 0)) {
+      throw new Error('missing data in file: ' + all_file)
+    }
+    return items
+  }
 
   let repos = select_repo.all()
   for (let repo of repos) {
@@ -208,6 +221,10 @@ function select_all(): ResItem[] {
 
 let allItems = select_all()
 allItems.sort((a, b) => compare(a.sortKey, b.sortKey))
+
+if (env.NODE_ENV == 'export' && import.meta.filename == process.argv[1]) {
+  writeJsonFileSync(all_file, allItems)
+}
 
 function build_search_query(params: URLSearchParams) {
   let action = params.get('form_action')
@@ -716,7 +733,7 @@ function build_search_query_test() {
   )
   console.log('all passed')
 }
-if (process.argv[1] == import.meta.filename) {
+if (env.NODE_ENV != 'export' && process.argv[1] == import.meta.filename) {
   build_search_query_test()
 }
 
