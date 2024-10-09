@@ -853,7 +853,12 @@ export function hasTypes(
 }
 
 function saveJSON(filename: string, payload: string) {
-  writeFileSync(filename, JSON.stringify(JSON.parse(payload), null, 2))
+  try {
+    writeFileSync(filename, JSON.stringify(JSON.parse(payload), null, 2))
+  } catch (error) {
+    writeFileSync(filename, payload)
+    throw error
+  }
 }
 
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
