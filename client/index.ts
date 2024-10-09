@@ -9,6 +9,7 @@ import {
   updateText,
   setValue,
   insertNodeBefore,
+  redirect,
 } from './jsx/dom.js'
 import { connectWS } from './ws/ws-lite.js'
 import type { LinkFlag, WindowStub } from './internal'
@@ -32,6 +33,11 @@ connectWS({
     function emit(...args: unknown[]): void
     function emit(): void {
       ws.send(Array.from(arguments) as ClientMessage)
+    }
+
+    function goto(url: string): void {
+      history.pushState(null, document.title, url)
+      emit(url)
     }
 
     function emitHref(event: MouseEvent, flag?: LinkFlag) {
@@ -108,6 +114,7 @@ connectWS({
     }
 
     win.emit = emit
+    win.goto = goto
     win.emitHref = emitHref
     win.emitForm = emitForm
     win.submitForm = submitForm
@@ -203,7 +210,7 @@ function onServerMessage(message: ServerMessage) {
       document.title = message[1]
       break
     case 'redirect':
-      location.href = message[1]
+      redirect(message[1], message[2])
       break
     case 'eval':
       eval(message[1])
@@ -212,6 +219,7 @@ function onServerMessage(message: ServerMessage) {
       console.error('unknown server message:', message)
   }
 }
+win.onServerMessage = onServerMessage
 
 function get(url: string) {
   return fetch(url)
@@ -223,13 +231,18 @@ function del(url: string) {
 }
 win.del = del
 
-function upload(event: Event) {
+function uploadForm(event: Event) {
   let form = event.target as HTMLFormElement
-  let result = fetch(form.action, {
-    method: 'POST',
-    body: new FormData(form),
-  })
+  let result = upload(form.action, new FormData(form))
   event.preventDefault()
   return result
+}
+win.uploadForm = uploadForm
+
+function upload(url: string, formData: FormData) {
+  return fetch(url, {
+    method: 'POST',
+    body: formData,
+  })
 }
 win.upload = upload
