@@ -312,15 +312,19 @@ function build_search_query(params: URLSearchParams) {
 
         target.push(name)
       }
-
-      for (let language of positive_languages) {
+      if (positive_languages.length > 0) {
         matchedItems = matchedItems.filter(item =>
-          item.programming_language?.toLowerCase().includes(language),
+          positive_languages.includes(
+            (item.programming_language || '').toLowerCase(),
+          ),
         )
       }
-      for (let language of negative_languages) {
+      if (negative_languages.length > 0) {
         matchedItems = matchedItems.filter(
-          item => !item.programming_language?.toLowerCase().includes(language),
+          item =>
+            !negative_languages.includes(
+              (item.programming_language || '').toLowerCase(),
+            ),
         )
       }
     }
