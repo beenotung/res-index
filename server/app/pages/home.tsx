@@ -474,6 +474,7 @@ function Page(attrs: {}, context: SearchContext) {
   return (
     <form
       id="searchForm"
+      data-trim-empty
       onsubmit="emitForm(event); loadingMessage.textContent='searching...'"
     >
       <input name="form_action" value="search" hidden />
