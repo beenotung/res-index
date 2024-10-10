@@ -19,6 +19,9 @@ case "$MODE" in
   q)
     MODE="quick"
     ;;
+  d)
+    MODE="data"
+    ;;
   '')
     MODE="default"
     ;;
