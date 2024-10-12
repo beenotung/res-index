@@ -185,6 +185,7 @@ has_types boolean NULL
 page_id integer unique FK >0- page.id
 download_page_id integer unique FK >0- page.id
 dependent_page_id integer unique FK >0- page.id
+not_found_time NULL
 
 
 npm_package_keyword

@@ -164,6 +164,7 @@ select
 from npm_package
 left join author on author.id = author_id
 where repo_id is null
+  and npm_package.not_found_time is null
 `)
 
 type ResItem = {

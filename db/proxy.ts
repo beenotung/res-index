@@ -172,6 +172,7 @@ export type NpmPackage = {
   download_page?: Page
   dependent_page_id: number
   dependent_page?: Page
+  not_found_time: null | number
 }
 
 export type NpmPackageKeyword = {

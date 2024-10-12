@@ -641,6 +641,7 @@ export function storeNpmPackage(pkg: {
       page_id: package_page_id,
       download_page_id,
       dependent_page_id,
+      not_found_time: null,
     })
     return id
   } else {
@@ -885,6 +886,7 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
 
     if (_pkg == 'Not Found' || 'error' in _pkg) {
       console.log('failed to get npm package detail:', { url, result: _pkg })
+      npm_package.not_found_time = Date.now()
       return
     }
 
