@@ -797,9 +797,14 @@ let published_npm_package_detail_parser = object({
   'bugs': optional(bugs_parser),
   'readme': optional(string()),
 })
-let not_found_npm_package_detail_parser = object({
+let not_found_npm_package_detail_parser_1 = object({
   error: literal('Not found'),
 })
+let not_found_npm_package_detail_parser_2 = literal('Not Found')
+let not_found_npm_package_detail_parser = or([
+  not_found_npm_package_detail_parser_1,
+  not_found_npm_package_detail_parser_2,
+])
 export let npm_package_detail_parser = or([
   unpublish_npm_package_detail_parser,
   published_npm_package_detail_parser,
@@ -878,7 +883,10 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     page.payload_hash = payloadHash
     page.update_time = now
 
-    if ('error' in _pkg) return
+    if (_pkg == 'Not Found' || 'error' in _pkg) {
+      console.log('failed to get npm package detail:', { url, result: _pkg })
+      return
+    }
 
     let packageTime = packageTimeParser.parse(_pkg.time)
 

@@ -6,7 +6,11 @@ import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
-import { storeNpmPackage, storeRepo } from './collect'
+import {
+  npm_package_detail_parser,
+  storeNpmPackage,
+  storeRepo,
+} from './collect'
 import { getLanguageId } from './store'
 import { env } from './env'
 import { startTimer } from '@beenotung/tslib/timer'
@@ -15,13 +19,28 @@ import { startTimer } from '@beenotung/tslib/timer'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
+let only: any = fix_extra_author_name
+
 function run(fn: () => unknown) {
-  if (fn != remove_malicious_package) return
+  if (only && fn !== only) return
   process.stdout.write(fn.name + '()...')
   console.time(fn.name)
   db.transaction(fn)()
   process.stdout.write('\r')
   console.timeEnd(fn.name)
+}
+
+let asyncQueue = Promise.resolve()
+
+function runAsync(fn: () => Promise<unknown>) {
+  if (only && fn !== only) return
+  asyncQueue = asyncQueue.then(async () => {
+    process.stdout.write(fn.name + '()...')
+    console.time(fn.name)
+    await fn()
+    process.stdout.write('\r')
+    console.timeEnd(fn.name)
+  })
 }
 
 function seed_local_repo() {
@@ -764,3 +783,67 @@ where name like '%on%=%'
   }
 }
 run(remove_malicious_package)
+
+// e.g. "ssylvia/ember-uuid" -> "ember-uuid"
+async function fix_extra_author_name() {
+  let rows = db
+    .prepare<
+      void[],
+      {
+        id: number
+        name: string
+        url: string
+      }
+    >(
+      /* sql */ `
+select
+  npm_package.id
+, npm_package.name
+, page.url
+from npm_package
+inner join page on page.id = page_id
+where name not like '@%'
+  and name like '%/%'
+`,
+    )
+    .all()
+  for (let row of rows) {
+    // e.g. "https://registry.npmjs.org/ssylvia/ember-uuid"
+    let url = row.url
+    if (await is_npm_package_exist(url)) {
+      // npm now allows this kind of name?
+      continue
+    }
+
+    // 1. check if we should add @
+    // e.g. "ssylvia/ember-uuid" -> "@ssylvia/ember-uuid"
+    let new_name = '@' + row.name
+    url = row.url.replace(row.name, new_name)
+    if (await is_npm_package_exist(url)) {
+      db.transaction(rename_npm_package)(row, new_name)
+      continue
+    }
+
+    // 2. check if we should remove author name
+    // e.g. "ssylvia/ember-uuid" -> "ember-uuid"
+    new_name = row.name.split('/').slice(1).join('/')
+    url = row.url.replace(row.name, new_name)
+    if (await is_npm_package_exist(url)) {
+      db.transaction(rename_npm_package)(row, new_name)
+      continue
+    }
+
+    throw new Error('invalid npm_package name: ')
+  }
+}
+runAsync(fix_extra_author_name)
+
+async function is_npm_package_exist(url: string) {
+  let res = await fetch(url)
+  let json = await res.json()
+  let pkg = npm_package_detail_parser.parse(json)
+  if (pkg == 'Not Found' || ('error' in pkg && pkg.error == 'Not found')) {
+    return false
+  }
+  return true
+}
