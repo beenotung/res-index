@@ -673,7 +673,7 @@ let unpublish_npm_package_detail_parser = object({
     modified: optional(date()),
     unpublished: object({
       time: date(),
-      versions: array(string()),
+      versions: optional(array(string())),
     }),
   }),
 })
