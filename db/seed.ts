@@ -19,7 +19,7 @@ import { startTimer } from '@beenotung/tslib/timer'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
-let only: any = fix_extra_author_name
+let only: any = seed_local_repo
 
 function run(fn: () => unknown) {
   if (only && fn !== only) return
