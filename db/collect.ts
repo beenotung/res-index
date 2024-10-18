@@ -911,8 +911,9 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     let timeList = Object.entries(pkg.time)
       .map(([version, date]) => ({
         version,
-        publish_time: date.getTime(),
+        publish_time: date instanceof Date ? date.getTime() : 0,
       }))
+      .filter(a => a.publish_time)
       .sort((a, b) => b.publish_time - a.publish_time)
 
     let version_name = pkg['dist-tags']?.latest
