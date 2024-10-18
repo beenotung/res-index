@@ -19,7 +19,7 @@ import { startTimer } from '@beenotung/tslib/timer'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
-let only: any = seed_local_repo
+let only: any = switch_res_type
 
 function run(fn: () => unknown) {
   if (only && fn !== only) return
@@ -677,6 +677,13 @@ run(remove_dot_git_in_repo)
 
 type NameRow = { id: number; name: string }
 
+function rename_npm_package_by_name(old_name: string, new_name: string) {
+  let row = find(proxy.npm_package, { name: old_name })
+  if (row) {
+    rename_npm_package({ id: row.id!, name: old_name }, new_name)
+  }
+}
+
 function rename_npm_package(row: NameRow, new_name: string) {
   let new_npm_package = find(proxy.npm_package, { name: new_name })
   if (!new_npm_package) {
@@ -783,6 +790,22 @@ where name like '%on%=%'
   }
 }
 run(remove_malicious_package)
+
+// switch from npm -> github
+function switch_res_type() {
+  rename_npm_package_by_name(
+    '@typestrong/fs-fixture-builder',
+    '@TypeStrong/fs-fixture-builder',
+  )
+  let row = find(proxy.npm_package, {
+    name: '@TypeStrong/fs-fixture-builder',
+  })
+  if (row) {
+    row.not_found_time = Date.now()
+  }
+  storeRepo('https://github.com/TypeStrong/fs-fixture-builder')
+}
+run(switch_res_type)
 
 // e.g. "ssylvia/ember-uuid" -> "ember-uuid"
 async function fix_extra_author_name() {

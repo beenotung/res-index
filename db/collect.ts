@@ -98,6 +98,7 @@ async function collectPendingPages(page: GracefulPage) {
     })
     timer.setEstimateProgress(pages.length)
     for (let { id, url } of pages) {
+      appendFileSync('log.txt', url + '\n')
       // timer.progress(' > url: ' + url)
       if (
         // e.g. "https://github.com/beenotung?page=1&tab=repositories"
@@ -141,6 +142,9 @@ async function collectPendingPages(page: GracefulPage) {
         let res = await checkNpmPackageDependents(page, url)
         if (res == 'rate limited') {
           dependent_rate_limited = true
+        }
+        if (res == 'not found') {
+          proxy.page[id].check_time = Date.now()
         }
       } else if (find(proxy.repo, { page_id: id! })) {
         // e.g. "https://gitlab.com/plade/sdks/js"
@@ -870,7 +874,6 @@ function saveJSON(filename: string, payload: string) {
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let page = npm_package.page!
   let url = page!.url
-  appendFileSync('log.txt', url + '\n')
   let res = await fetch(url)
   let payload = await res.text()
   let payloadHash = hashString(payload)
@@ -1207,6 +1210,14 @@ async function collectNpmPackageDependents(page: GracefulPage, name: string) {
 }
 
 async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
+  // check if the npm package is not found
+  {
+    let name = indexUrl.split('?')[0].split('/').slice(-2).join('/')
+    let row = find(proxy.npm_package, { name })
+    if (row?.not_found_time) {
+      return 'not found' as const
+    }
+  }
   let response = await page.goto(indexUrl)
   if (response?.status() == 429) {
     return 'rate limited' as const
