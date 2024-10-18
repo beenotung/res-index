@@ -817,7 +817,7 @@ let packageTimeParser = object({
   unpublished: optional(
     object({
       time: date(),
-      versions: array(string()),
+      versions: optional(array(string())),
     }),
   ),
 })
