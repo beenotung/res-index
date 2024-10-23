@@ -689,8 +689,9 @@ let types_parser = or([
     author: optional(string()),
     version: optional(string()),
     main: optional(string()),
-    types: optional(string()),
+    types: optional(or([string(), boolean()])),
   }),
+  boolean(),
 ]) as Parser<
   | string
   | string[]
@@ -699,8 +700,9 @@ let types_parser = or([
       author?: string
       version?: string
       main?: string
-      types?: string
+      types?: string | boolean
     }
+  | boolean
 >
 let homepage_parser = or([
   string({
@@ -851,15 +853,23 @@ function takeBugs(
 export function hasTypes(
   types: undefined | ParseResult<typeof types_parser>,
 ): boolean {
+  // e.g. npm package: "@vizzly/dashboard" uses `false` in the "types" field
+  if (!types) {
+    return false
+  }
   if (Array.isArray(types)) {
     // e.g. npm package: "@arpit09/angular-vanilla" uses empty array in the "types" field
-    types = types.join()
+    return types.some(hasTypes)
   }
   if (types && typeof types == 'object') {
     // e.g. npm package "@anclient/anreact" use object to represent the name,version,author,main,types
-    types = types.types
+    return hasTypes(types.types)
   }
-  return !!types?.trim()
+  if (typeof types == 'string') {
+    return !!types.trim()
+  }
+  // being `true` ?
+  return !!types
 }
 
 function saveJSON(filename: string, payload: string) {
