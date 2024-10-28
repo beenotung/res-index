@@ -898,7 +898,6 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
     page.update_time = now
 
     if (_pkg == 'Not Found' || 'error' in _pkg) {
-      console.log('failed to get npm package detail:', { url, result: _pkg })
       npm_package.not_found_time = Date.now()
       return
     }
