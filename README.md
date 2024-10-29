@@ -18,7 +18,7 @@ Pasting the exact npm url in subsequence search doesn't seem effective at hintin
 
 This project aim to actively index some github repositories and npm packages to enable more inclusive searching.
 
-In addition, this project try be SEO-friendly. Hopefully, it can improve google's search result overtime.
+In addition, this project try to be SEO-friendly. Hopefully, it can improve google's search result overtime.
 
 ## Development
 
