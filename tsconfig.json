@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    // "noUnusedLocals": true,
     "allowSyntheticDefaultImports": true,
     "jsx": "react",
     "jsxFactory": "o",
@@ -12,7 +13,7 @@
     "module": "es2022",
     "lib": [
       "dom",
-      "es2022",
+      "es2022"
     ],
     "outDir": "dist"
   },

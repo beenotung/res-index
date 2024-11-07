@@ -12,12 +12,14 @@ import {
 } from '../../../db/proxy.js'
 import { db } from '../../../db/db.js'
 import { find, clearCache } from 'better-sqlite3-proxy'
-import { EarlyTerminate, toRouteUrl } from '../helpers.js'
+import { EarlyTerminate, } from '../../exception.js'
+import {  toRouteUrl } from '../../url.js'
 import { binArray } from '@beenotung/tslib/array.js'
 import { Timer, startTimer } from '@beenotung/tslib/timer.js'
 import { later } from '@beenotung/tslib/async/wait.js'
 import { ProgressCli } from '@beenotung/tslib/progress-cli.js'
 import { query_cache, sql_cache } from '../cache.js'
+import { env } from '../../env.js'
 
 let pageTitle = 'Dataset'
 let addPageTitle = 'Add Dataset'
@@ -113,7 +115,7 @@ async function post_once(url: string, body: object) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Sync-API-Key': config.api_key.sync,
+      'X-Sync-API-Key': env.SYNC_API_KEY,
       'User-Agent': 'res-index dataset sync client',
     },
     body: JSON.stringify(body),
@@ -214,7 +216,7 @@ function brideToFn<Fn extends (input: any) => any>(
   if (context.type != 'express') {
     throw new Error('unsupported context type: ' + context.type)
   }
-  if (context.req.headers['x-sync-api-key'] != config.api_key.sync) {
+  if (context.req.headers['x-sync-api-key'] != env.API.api_key.sync) {
     throw new Error('invalid SYNC_API_KEY')
   }
   let json = fn(context.req.body)

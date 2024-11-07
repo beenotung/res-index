@@ -1,19 +1,17 @@
 import { apiEndpointTitle, title } from '../../config.js'
 import { commonTemplatePageText } from '../components/common-template.js'
 import { Link, Redirect } from '../components/router.js'
-import { DynamicContext, ExpressContext } from '../context.js'
+import { DynamicContext, ExpressContext, getContextSearchParams } from '../context.js'
 import { o } from '../jsx/jsx.js'
-import { Routes, getContextSearchParams } from '../routes.js'
+import { Routes,  } from '../routes.js'
 import { proxy } from '../../../db/proxy.js'
 import { eraseUserIdFromCookie, getAuthUserId } from '../auth/user.js'
 import { Router } from 'express'
 import { createUploadForm } from '../upload.js'
-import { HttpError } from '../../http-error.js'
 import Style from '../components/style.js'
 import { renderError } from '../components/error.js'
 import { Raw } from '../components/raw.js'
 import { loadClientPlugin } from '../../client-plugin.js'
-import { client_config } from '../../../client/client-config.js'
 
 let style = Style(/* css */ `
 #profile .avatar {
@@ -57,7 +55,7 @@ let ProfilePage = (_attrs: {}, context: DynamicContext) => {
 function renderProfile(user_id: number, context: DynamicContext) {
   let user = proxy.user[user_id]
   let params = getContextSearchParams(context)
-  let error = params.get('error')
+  let error = params?.get('error')
   return (
     <>
       <p>Welcome back, {user.username || user.email}</p>
@@ -152,11 +150,8 @@ function attachRoutes(app: Router) {
       let user = proxy.user[user_id]
       if (!user) throw 'user not found'
 
-      let form = createUploadForm({
-        mimeTypeRegex: /^image\/.+/,
-        maxFileSize: client_config.max_image_size,
-      })
-      let [_fields, files] = await form.parse(req)
+      let form = createUploadForm()
+      let [fields, files] = await form.parse(req)
 
       let file = files.avatar?.[0]
       if (!file) throw 'missing avatar file'
@@ -173,7 +168,7 @@ function attachRoutes(app: Router) {
   })
 }
 
-let routes: Routes = {
+let routes = {
   '/profile': {
     title: title('Profile Page'),
     description: `Manage your public profile and exclusive content`,
@@ -187,6 +182,6 @@ let routes: Routes = {
     streaming: false,
     node: <Logout />,
   },
-}
+} satisfies Routes
 
 export default { routes, attachRoutes }

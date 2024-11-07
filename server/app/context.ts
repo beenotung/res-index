@@ -4,11 +4,14 @@ import type { RouteContext } from 'url-router.ts'
 import type { Session } from './session'
 import type { PageRoute } from './routes'
 import { getContextCookies } from './cookie.js'
+import { EarlyTerminate, HttpError, MessageException } from '../exception.js'
+import type { ServerMessage } from '../../client/types'
 
 export type Context = StaticContext | DynamicContext
 
 export type StaticContext = {
   type: 'static'
+  language: string
 }
 
 export type DynamicContext = ExpressContext | WsContext
@@ -35,6 +38,21 @@ export type RouterContext = {
 
 export type RouterMatch = Omit<RouteContext<PageRoute>, 'value'>
 
+export function toExpressContext(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  let context: ExpressContext = {
+    type: 'express',
+    req,
+    res,
+    next,
+    url: req.url,
+  }
+  return context
+}
+
 export function getContextUrl(context: Context): string {
   if (context.type === 'static') {
     throw new Error('url is not supported in static context')
@@ -60,13 +78,38 @@ export function getContextFormBody(context: Context): unknown | undefined {
   }
 }
 
+type FormBody = Record<string, string[] | string>
+
+export function getStringCasual(body: FormBody | unknown, key: string): string {
+  if (!body || typeof body !== 'object') return ''
+  let value = (body as FormBody)[key]
+  return typeof value === 'string' ? value : ''
+}
+
+export function getId(body: FormBody | unknown, key: string): number {
+  if (!body || typeof body !== 'object')
+    throw new HttpError(400, 'missing form body')
+  if (!(key in body)) throw new HttpError(400, 'missing ' + key)
+  let value = +(body as FormBody)[key]
+  if (!value) throw new HttpError(400, 'invalid ' + key)
+  return value
+}
+
+export function getContextSearchParams(
+  context: Context,
+): URLSearchParams | undefined {
+  let search =
+    context.type == 'static' ? undefined : context.routerMatch?.search
+  return new URLSearchParams(search)
+}
+
 export function getContextLanguage(context: Context): string | undefined {
   let lang = getContextCookies(context)?.unsignedCookies.lang
   if (lang) {
     return lang
   }
   if (context.type === 'static') {
-    return
+    return context.language
   }
   if (context.type === 'ws') {
     return fixLanguage(context.session.language)
@@ -90,5 +133,36 @@ function fixLanguage(language: string | undefined): string | undefined {
 export function getContextTimezone(context: Context): string | undefined {
   if (context.type === 'ws') {
     return context.session.timeZone
+  }
+}
+
+export function isAjax(context: Context): boolean {
+  if (context.type !== 'express') return false
+  let mode = context.req.header('Sec-Fetch-Mode')
+  return mode != null && mode !== 'navigate'
+}
+
+export function throwIfInAPI(
+  error: unknown,
+  selector: string,
+  context: Context,
+) {
+  let message: ServerMessage =
+    error instanceof MessageException
+      ? error.message
+      : [
+          'batch',
+          [
+            ['update-text', selector, String(error)],
+            ['add-class', selector, 'error'],
+          ],
+        ]
+  if (context.type == 'ws') {
+    context.ws.send(message)
+    throw EarlyTerminate
+  }
+  if (context.type == 'express' && isAjax(context)) {
+    context.res.json({ message })
+    throw EarlyTerminate
   }
 }

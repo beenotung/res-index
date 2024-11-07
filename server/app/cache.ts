@@ -1,5 +1,5 @@
 import { db } from '../../db/db.js'
-import { Statement } from 'better-sqlite3'
+import type { Statement } from 'better-sqlite3'
 
 const max_size = 100
 

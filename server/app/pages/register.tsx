@@ -2,8 +2,13 @@ import { LayoutType, apiEndpointTitle, config, title } from '../../config.js'
 import { commonTemplatePageText } from '../components/common-template.js'
 import { Link } from '../components/router.js'
 import Style from '../components/style.js'
-import { Context, getContextFormBody, WsContext } from '../context.js'
-import { EarlyTerminate, getStringCasual } from '../helpers.js'
+import {
+  Context,
+  getContextFormBody,
+  WsContext,
+  getStringCasual,
+} from '../context.js'
+import { EarlyTerminate } from '../../exception.js'
 import { o } from '../jsx/jsx.js'
 import { find } from 'better-sqlite3-proxy'
 import {
@@ -21,7 +26,7 @@ import { hashPassword } from '../../hash.js'
 import { Routes, StaticPageRoute } from '../routes.js'
 import { Node } from '../jsx/types.js'
 import { renderError } from '../components/error.js'
-import { getContextCookies, getWsCookies } from '../cookie.js'
+import { getWsCookies } from '../cookie.js'
 import { getAuthUserId } from '../auth/user.js'
 import { UserMessageInGuestView } from './profile.js'
 import { wsStatus } from '../components/ws-status.js'
@@ -131,7 +136,7 @@ let guestView = (
     <form
       method="POST"
       action="/verify/email/submit"
-      // onsubmit="emitForm(event)"
+      onsubmit="emitForm(event)"
     >
       {emailFormBody}
     </form>
@@ -185,8 +190,10 @@ function checkPassword (form) {
       Your password is not be stored in plain text.
       <br />
       Instead, it is processed with{' '}
-      <a href="https://en.wikipedia.org/wiki/Bcrypt">bcrypt algorithm</a> to
-      protect your credential against data leak.
+      <a href="https://en.wikipedia.org/wiki/Argon2" target="_blank">
+        Argon2 algorithm
+      </a>{' '}
+      to protect your credential against data leak.
     </div>
     {wsStatus.safeArea}
   </>
@@ -249,7 +256,7 @@ function ClearInputContext(_attrs: {}, context: InputContext) {
 
 type InputContext = Context & {
   contextError?: ContextError
-  values?: Record<string, string>
+  values?: Record<string, string | null>
 }
 type ContextError = Record<string, ValidateResult>
 
@@ -347,7 +354,7 @@ function validatePassword(password: string): ValidateResult {
 }
 
 // email is optional
-function validateEmail(email: string): ValidateResult {
+function validateEmail(email: string | null): ValidateResult {
   if (!email) {
     return { type: 'ok', text: '' }
   }
@@ -378,16 +385,16 @@ function validateConfirmPassword(input: {
   if (!input.password)
     return {
       type: 'error',
-      text: 'Password not provided',
+      text: 'password not provided',
     }
   if (input.password != input.confirm_password)
     return {
       type: 'error',
-      text: 'Password not matched',
+      text: 'password not matched',
     }
   return {
     type: 'ok',
-    text: 'Password matched',
+    text: 'password matched',
   }
 }
 
@@ -498,7 +505,7 @@ async function submit(context: InputContext): Promise<Node> {
     let input = {
       username: getStringCasual(body, 'username').trim().toLowerCase(),
       password: getStringCasual(body, 'password'),
-      email: getStringCasual(body, 'email').trim().toLowerCase(),
+      email: getStringCasual(body, 'email').trim().toLowerCase() || null,
       confirm_password: getStringCasual(body, 'confirm_password'),
     }
     let results = {
@@ -520,6 +527,7 @@ async function submit(context: InputContext): Promise<Node> {
       email: input.email,
       tel: null,
       avatar: null,
+      is_admin: null,
     })
 
     let main: Node
@@ -576,7 +584,7 @@ fetch('/login/submit',{
   }
 }
 
-let routes: Routes = {
+let routes = {
   '/register': {
     title: title('Register'),
     description: `Register to access exclusive content and functionality. Join our community on ${config.short_site_name}.`,
@@ -609,6 +617,6 @@ let routes: Routes = {
       }
     },
   },
-}
+} satisfies Routes
 
 export default { routes }

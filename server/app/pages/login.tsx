@@ -87,7 +87,7 @@ let guestView = (
     <form
       method="POST"
       action="/verify/email/submit"
-      // onsubmit="emitForm(event)"
+      onsubmit="emitForm(event)"
     >
       {emailFormBody}
     </form>
@@ -155,7 +155,7 @@ async function submit(context: ExpressContext) {
   }
 }
 
-let routes: Routes = {
+let routes = {
   '/login': {
     title: title('Login'),
     description: `Login to access exclusive content and functionality. Welcome back to our community on ${config.short_site_name}.`,
@@ -174,6 +174,6 @@ let routes: Routes = {
       }
     },
   },
-}
+} satisfies Routes
 
 export default { routes }

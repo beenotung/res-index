@@ -1,35 +1,4 @@
-import { config as loadEnv } from 'dotenv'
-import { populateEnv } from 'populate-env'
-import { cwd } from 'process'
-
-loadEnv()
-
-let env = {
-  NODE_ENV: 'development',
-  PORT: 8100,
-  COOKIE_SECRET: '',
-  EPOCH: 1, // to distinct initial run or restart in serve mode
-  UPLOAD_DIR: 'uploads',
-  EMAIL_SERVICE: 'google',
-  EMAIL_HOST: 'smtp.gmail.com',
-  EMAIL_PORT: 587,
-  EMAIL_USER: '',
-  EMAIL_PASSWORD: '',
-  ORIGIN: '',
-  SYNC_API_KEY: '',
-}
-applyDefaultEnv()
-
-function applyDefaultEnv() {
-  if (process.env.NODE_ENV === 'production') return
-  let PORT = process.env.PORT || env.PORT
-  env.COOKIE_SECRET ||= process.env.COOKIE_SECRET || cwd()
-  env.EMAIL_USER ||= process.env.EMAIL_USER || 'skip'
-  env.EMAIL_PASSWORD ||= process.env.EMAIL_PASSWORD || 'skip'
-  env.ORIGIN ||= process.env.ORIGIN || 'http://localhost:' + PORT
-}
-
-populateEnv(env, { mode: 'halt' })
+import { env } from './env.js'
 
 let production = env.NODE_ENV === 'production'
 let development = env.NODE_ENV === 'development'
@@ -52,9 +21,7 @@ export enum LayoutType {
 export let config = {
   production,
   development,
-  port: env.PORT,
-  origin: env.ORIGIN,
-  cookie_secret: env.COOKIE_SECRET,
+  minify: production,
   site_name: 'Resources Index',
   short_site_name: 'res-index',
   site_description:
@@ -62,21 +29,8 @@ export let config = {
   setup_robots_txt: false,
   epoch,
   auto_open: !production && development && epoch === 1,
-  upload_dir: env.UPLOAD_DIR,
   client_target: 'es2020',
   layout_type: LayoutType.navbar,
-  email: {
-    service: env.EMAIL_SERVICE,
-    host: env.EMAIL_HOST,
-    port: env.EMAIL_PORT,
-    auth: {
-      user: env.EMAIL_USER,
-      pass: env.EMAIL_PASSWORD,
-    },
-  },
-  api_key: {
-    sync: env.SYNC_API_KEY,
-  },
 }
 
 const titleSuffix = ' | ' + config.site_name

@@ -1,8 +1,8 @@
 import { Random, digits } from '@beenotung/tslib/random.js'
 import { MINUTE } from '@beenotung/tslib/time.js'
 import { db } from '../../../db/db.js'
-import { HttpError } from '../../http-error.js'
-import { VerificationCode, proxy } from '../../../db/proxy.js'
+import { HttpError, MessageException } from '../../exception.js'
+import { proxy } from '../../../db/proxy.js'
 import { boolean, email, object, optional, string } from 'cast.ts'
 import { sendEmail } from '../../email.js'
 import { apiEndpointTitle, config, title } from '../../config.js'
@@ -22,6 +22,7 @@ import { renderError } from '../components/error.js'
 import { debugLog } from '../../debug.js'
 import { filter, find } from 'better-sqlite3-proxy'
 import { writeUserIdToCookie } from '../auth/user.js'
+import { env } from '../../env.js'
 
 let log = debugLog('app:verification-code')
 log.enabled = true
@@ -48,7 +49,7 @@ where request_time > :request_time
   )
   .pluck()
 
-function generatePasscode(): string {
+export function generatePasscode(): string {
   for (let i = 0; i < MaxPasscodeGenerationAttempt; i++) {
     let passcode = Random.nextString(PasscodeLength, digits)
 
@@ -94,7 +95,7 @@ async function requestEmailVerification(
       context,
     )
     let info = await sendEmail({
-      from: config.email.auth.user,
+      from: env.EMAIL_USER,
       to: input.email,
       subject: title('Email Verification'),
       html,
@@ -102,6 +103,16 @@ async function requestEmailVerification(
     })
     if (info.accepted[0] === input.email) {
       log('sent passcode email to:', input.email)
+      if (
+        env.EMAIL_USER == 'skip' &&
+        context.type == 'ws' &&
+        env.ORIGIN.includes('localhost')
+      ) {
+        context.ws.send([
+          'eval',
+          `alert('[dev] verification code: ${passcode}')`,
+        ])
+      }
     } else {
       log('failed to send email?')
       log('send email info:')
@@ -122,6 +133,9 @@ async function requestEmailVerification(
       ),
     }
   } catch (error) {
+    if (error instanceof MessageException) {
+      throw error
+    }
     return {
       title: title('Email Verification'),
       description:
@@ -138,12 +152,12 @@ async function requestEmailVerification(
   }
 }
 
-function verificationCodeEmail(
+export function verificationCodeEmail(
   attrs: { passcode: string; email: string | null },
   context: Context,
 ) {
   let url = attrs.email
-    ? config.origin +
+    ? env.ORIGIN +
       '/verify/email/result?' +
       new URLSearchParams({
         code: attrs.passcode,
@@ -199,7 +213,7 @@ let style = Style(/* css */ `
   flex-wrap: wrap;
   margin-bottom: 0.5rem;
 }
-#verifyEmailPage  form .field input {
+#verifyEmailPage form .field input {
   margin: 0.25rem 0;
 }
 `)
@@ -254,7 +268,7 @@ function VerifyEmailForm(attrs: { params: URLSearchParams }) {
             name="email"
             value={email}
             readonly
-            style={email ? `width: ${email.length}ch` : undefined}
+            style={email ? `width: ${email.length + 2}ch` : undefined}
           />
         }
       />
@@ -270,6 +284,7 @@ function VerifyEmailForm(attrs: { params: URLSearchParams }) {
             placeholder={'x'.repeat(PasscodeLength)}
             required
             value={code}
+            autocomplete="off"
           />
         }
       />
@@ -383,6 +398,7 @@ async function checkEmailVerificationCode(
             password_hash: null,
             tel: null,
             avatar: null,
+            is_admin: null,
           })
         break
       }
@@ -419,7 +435,7 @@ async function checkEmailVerificationCode(
   }
 }
 
-let routes: Routes = {
+let routes = {
   '/verify/email/submit': {
     streaming: false,
     resolve: requestEmailVerification,
@@ -433,6 +449,6 @@ let routes: Routes = {
     streaming: false,
     resolve: checkEmailVerificationCode,
   },
-}
+} satisfies Routes
 
 export default { routes }

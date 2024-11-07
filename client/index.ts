@@ -10,6 +10,8 @@ import {
   setValue,
   insertNodeBefore,
   redirect,
+  addClass,
+  removeClass,
 } from './jsx/dom.js'
 import { connectWS } from './ws/ws-lite.js'
 import type { LinkFlag, WindowStub } from './internal'
@@ -200,6 +202,12 @@ function onServerMessage(message: ServerMessage) {
     case 'set-value':
       setValue(message[1], message[2])
       break
+    case 'add-class':
+      addClass(message[1], message[2])
+      break
+    case 'remove-class':
+      removeClass(message[1], message[2])
+      break
     case 'batch':
       message[1].forEach(onServerMessage)
       break
@@ -215,8 +223,10 @@ function onServerMessage(message: ServerMessage) {
     case 'eval':
       eval(message[1])
       break
-    default:
-      console.error('unknown server message:', message)
+    default: {
+      let rest: never = message
+      console.error('unknown server message:', rest)
+    }
   }
 }
 win.onServerMessage = onServerMessage

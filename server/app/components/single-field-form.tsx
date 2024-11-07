@@ -1,7 +1,7 @@
 import { object, Parser, string } from 'cast.ts'
 import { apiEndpointTitle } from '../../config.js'
 import { DynamicContext, getContextFormBody } from '../context.js'
-import { EarlyTerminate } from '../helpers.js'
+import { EarlyTerminate } from '../../exception.js'
 import { o } from '../jsx/jsx.js'
 import { Node } from '../jsx/types.js'
 import { Routes } from '../routes.js'
@@ -155,13 +155,13 @@ export function newSingleFieldForm<
     return renderUpdate({ input }, context)
   }
 
-  let routes: Routes = {
+  let routes = {
     [action]: {
       title: apiEndpointTitle,
       description,
       node: <Update />,
     },
-  }
+  } satisfies Routes
 
   return { Form, Update, routes }
 }

@@ -47,7 +47,7 @@ export type PageRouteOptions = {
 
 export type StaticPageRoute = {
   title: string
-  node: Node
+  node: Node | VNode
   description: string
   status?: number
 } & RenderOptions
@@ -66,7 +66,7 @@ export type Routes = Record<string, PageRoute>
 // or invoke functional component with x-html tag, e.g. `<Editor/>
 
 // TODO direct support alternative urls instead of having to repeat the entry
-let routeDict: Routes = {
+let routeDict = {
   ...Home.routes,
   ...About.routes,
   ...Dataset.routes,
@@ -81,7 +81,7 @@ let routeDict: Routes = {
   // ...Register.routes,
   // ...Profile.routes,
   // ...VerificationCode.routes,
-}
+} satisfies Routes
 
 export let redirectDict: Record<string, string> = {
   '/server/app/pages/home.tsx': '/',
@@ -91,7 +91,7 @@ export const pageRouter = new Router<PageRoute>()
 
 export const menuRoutes: MenuRoute[] = []
 
-Object.entries(routeDict).forEach(([url, route]) => {
+Object.entries(routeDict as Routes).forEach(([url, route]) => {
   pageRouter.add(url, { url, ...route })
   if (route.menuText) {
     menuRoutes.push({
@@ -130,10 +130,43 @@ export function matchRoute(
   return route
 }
 
-export function getContextSearchParams(context: DynamicContext) {
-  return new URLSearchParams(
-    context.routerMatch?.search || context.url.split('?').pop(),
-  )
+export function resolveExpressContext(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  let context: ExpressContext = {
+    type: 'express',
+    req,
+    res,
+    next,
+    url: req.url,
+    routerMatch: pageRouter.route(req.url),
+  }
+  return context
+}
+
+export function errorRoute(
+  error: unknown,
+  context: Context,
+  title: string,
+  description: string,
+): StaticPageRoute {
+  if (error == EarlyTerminate || error instanceof MessageException) {
+    throw error
+  }
+  if (context.type == 'ws' && typeof error == 'string') {
+    throw new MessageException([
+      'eval',
+      // `showToast(${JSON.stringify(error)},'error')`,
+      `showAlert(${JSON.stringify(error)},'error')`,
+    ])
+  }
+  return {
+    title,
+    description,
+    node: renderError(error, context),
+  }
 }
 
 if (config.setup_robots_txt) {
