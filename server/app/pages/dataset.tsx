@@ -1,28 +1,21 @@
 import { o } from '../jsx/jsx.js'
 import { ResolvedPageRoute, Routes } from '../routes.js'
-import { apiEndpointTitle, config, title } from '../../config.js'
+import { apiEndpointTitle, title } from '../../config.js'
 import Style from '../components/style.js'
 import { Context, DynamicContext } from '../context.js'
 import {
-  NpmPackage,
-  NpmPackageDependency,
-  Page,
-  Repo,
   proxy,
 } from '../../../db/proxy.js'
 import { db } from '../../../db/db.js'
-import { find, clearCache } from 'better-sqlite3-proxy'
+import { clearCache } from 'better-sqlite3-proxy'
 import { EarlyTerminate, } from '../../exception.js'
 import {  toRouteUrl } from '../../url.js'
-import { binArray } from '@beenotung/tslib/array.js'
-import { Timer, startTimer } from '@beenotung/tslib/timer.js'
 import { later } from '@beenotung/tslib/async/wait.js'
 import { ProgressCli } from '@beenotung/tslib/progress-cli.js'
 import { query_cache, sql_cache } from '../cache.js'
 import { env } from '../../env.js'
 
 let pageTitle = 'Dataset'
-let addPageTitle = 'Add Dataset'
 
 let style = Style(/* css */ `
 #Dataset table {
@@ -216,7 +209,7 @@ function brideToFn<Fn extends (input: any) => any>(
   if (context.type != 'express') {
     throw new Error('unsupported context type: ' + context.type)
   }
-  if (context.req.headers['x-sync-api-key'] != env.API.api_key.sync) {
+  if (context.req.headers['x-sync-api-key'] != env.SYNC_API_KEY) {
     throw new Error('invalid SYNC_API_KEY')
   }
   let json = fn(context.req.body)
