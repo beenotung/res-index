@@ -339,7 +339,8 @@ async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   })
   let is_disabled = await page.evaluate(() => {
     return !!Array.from(document.querySelectorAll('h3')).find(
-      h3 => h3.innerText == 'This repository has been disabled',
+      h3 =>
+        h3.innerText.replace(/\.$/, '') == 'This repository has been disabled',
     )
   })
   let is_404 = response?.status() == 404
