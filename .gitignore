@@ -37,3 +37,4 @@ data/*.sql
 *.zst
 samples/
 data/all.json
+data/stat.json

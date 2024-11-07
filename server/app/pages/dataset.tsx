@@ -12,6 +12,8 @@ import { later } from '@beenotung/tslib/async/wait.js'
 import { ProgressCli } from '@beenotung/tslib/progress-cli.js'
 import { query_cache, sql_cache } from '../cache.js'
 import { env } from '../../env.js'
+import { readJsonFileSync, writeJsonFileSync } from '@beenotung/tslib/fs.js'
+import { existsSync } from 'fs'
 
 let pageTitle = 'Dataset'
 
@@ -65,6 +67,42 @@ where npm_package.page_id in (select id from checked_page)
   )
   .pluck()
 
+let stat_file = 'data/stat.json'
+
+type Counts = {
+  repo: {
+    checked: number
+    total: number
+  }
+  npm_package: {
+    checked: number
+    total: number
+  }
+}
+
+function getCounts(): Counts {
+  if (env.NODE_ENV != 'export' && existsSync(stat_file)) {
+    return readJsonFileSync(stat_file)
+  }
+
+  let counts: Counts = {
+    repo: {
+      checked: count_checked_repo.get()!,
+      total: proxy.repo.length,
+    },
+    npm_package: {
+      checked: count_checked_npm_package.get()!,
+      total: proxy.npm_package.length,
+    },
+  }
+
+  writeJsonFileSync(stat_file, counts)
+
+  return counts
+}
+
+let counts = getCounts()
+
 function Main(attrs: {}, context: Context) {
   return (
     <>
@@ -80,13 +118,13 @@ function Main(attrs: {}, context: Context) {
         <tbody>
           <tr>
             <td>git repo</td>
-            <td>{count_checked_repo.get()!.toLocaleString()}</td>
-            <td>{proxy.repo.length.toLocaleString()}</td>
+            <td>{counts.repo.checked.toLocaleString()}</td>
+            <td>{counts.repo.total.toLocaleString()}</td>
           </tr>
           <tr>
             <td>npm package</td>
-            <td>{count_checked_npm_package.get()!.toLocaleString()}</td>
-            <td>{proxy.npm_package.length.toLocaleString()}</td>
+            <td>{counts.npm_package.checked.toLocaleString()}</td>
+            <td>{counts.npm_package.total.toLocaleString()}</td>
           </tr>
         </tbody>
       </table>

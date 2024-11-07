@@ -10,13 +10,10 @@ import { ProgrammingLanguageSpan } from '../components/programming-language.js'
 import { Link } from '../components/router.js'
 import { nodeToVNode } from '../jsx/vnode.js'
 import { Element } from '../jsx/types.js'
-import { newDB } from 'better-sqlite3-schema'
 import { DAY } from '@beenotung/tslib/time.js'
 import { Routes } from '../routes.js'
-import { prepared_statement_cache, query_cache, sql_cache } from '../cache.js'
 import { compare } from '@beenotung/tslib/compare.js'
-import { env } from '../../../db/env.js'
-import { readFileSync, writeFileSync } from 'fs'
+import { env } from '../../env.js'
 import { readJsonFileSync, writeJsonFileSync } from '@beenotung/tslib/fs.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
@@ -234,7 +231,7 @@ function remove_unused_items() {
 
 remove_unused_items()
 
-if (env.NODE_ENV == 'export' && import.meta.filename == process.argv[1]) {
+if (env.NODE_ENV == 'export') {
   writeJsonFileSync(all_file, allItems)
 }
 

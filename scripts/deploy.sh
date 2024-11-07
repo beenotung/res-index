@@ -8,7 +8,7 @@ if [ -z "$MODE" ]; then
   echo "possible mode:"
   echo "  [f] first   (start new pm2 process)"
   echo "  [q] quick   (for UI-only updates)"
-  echo "  [d] data    (for data/all.json)"
+  echo "  [d] data    (for data/*.json)"
   echo "  [ ] default (install dependencies and run database migration)"
   read -p "mode: " MODE
 fi
@@ -74,8 +74,10 @@ else
   fi
   if [ "$MODE" == "data" ]; then
     NODE_ENV=export node dist/server/app/pages/home.js
+    NODE_ENV=export node dist/server/app/pages/dataset.js
     rsync -SavLPz \
       data/all.json \
+      data/stat.json \
       "$user@$host:$root_dir/data"
   fi
   ssh "$user@$host" "
