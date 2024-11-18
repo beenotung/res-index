@@ -242,6 +242,9 @@ export function cleanRepoUrl(url: string | null): string | null {
     }
     throw new Error(`Incomplete repo url: ` + url)
   }
+  if (repo.username.replaceAll('?', '') === '') {
+    throw new Error(`Invalid username: ${repo.username}`)
+  }
 
   return url
 }

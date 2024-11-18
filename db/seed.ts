@@ -19,7 +19,7 @@ import { startTimer } from '@beenotung/tslib/timer'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
-let only: any = switch_res_type
+let only: any = remove_invalid_repo_url
 
 function run(fn: () => unknown) {
   if (only && fn !== only) return
@@ -870,3 +870,18 @@ async function is_npm_package_exist(url: string) {
   }
   return true
 }
+
+// e.g. "https://github.com/???/eslint-plugin-xxxx"
+function remove_invalid_repo_url() {
+  let rows = db.query("select id from repo where url like '%???%'")
+  for (let row of rows) {
+    let npm_packages = filter(proxy.npm_package, { repo_id: row.id })
+    for (let npm_package of npm_packages) {
+      console.log('reset npm_package:', npm_package.name)
+      npm_package.repo_id = null
+      npm_package.page!.check_time = null
+    }
+    deleteRepo(row.id)
+  }
+}
+run(remove_invalid_repo_url)
