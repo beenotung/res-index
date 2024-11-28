@@ -19,7 +19,7 @@ import { startTimer } from '@beenotung/tslib/timer'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
-let only: any = remove_invalid_repo_url
+let only: any = remove_invalid_npm_package_name
 
 function run(fn: () => unknown) {
   if (only && fn !== only) return
@@ -506,6 +506,12 @@ function deleteNpmPackage(npm_package_id: number) {
   })()
 }
 
+function unlinkNpmPackage(id: number) {
+  del(proxy.npm_package_keyword, { npm_package_id: id })
+  del(proxy.npm_package_dependency, { package_id: id })
+  del(proxy.npm_package_dependency, { dependency_id: id })
+}
+
 function fix_npm_registry_url() {
   // component is an old package manager (you can do component install lib-name)
   // e.g. "component/assert" -> "assert"
@@ -783,9 +789,7 @@ where name like '%on%=%'
     }
     console.log()
     console.log('remove malicious npm_package:', row)
-    del(proxy.npm_package_keyword, { npm_package_id: row.id })
-    del(proxy.npm_package_dependency, { package_id: row.id })
-    del(proxy.npm_package_dependency, { dependency_id: row.id })
+    unlinkNpmPackage(row.id)
     deleteNpmPackage(row.id)
   }
 }
@@ -885,3 +889,15 @@ function remove_invalid_repo_url() {
   }
 }
 run(remove_invalid_repo_url)
+
+// e.g. "@jsliujunyu@163.com/react-webpack-scaffold"
+function remove_invalid_npm_package_name() {
+  let rows = db.query("select id, name from npm_package where name like '@%@%'")
+  for (let row of rows) {
+    console.log()
+    console.log('remove invalid npm_package:', row)
+    unlinkNpmPackage(row.id)
+    deleteNpmPackage(row.id)
+  }
+}
+run(remove_invalid_npm_package_name)

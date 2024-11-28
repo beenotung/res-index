@@ -32,6 +32,7 @@ import { cleanRepoUrl, parseRepoUrl } from './format'
 import { getLanguageId } from './store'
 import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
 import { hashString } from './hash'
+import { is_semver } from '@beenotung/tslib/semver'
 
 // TODO get repo list from username (npm package > repo > username > repo list)
 // TODO continues updates each pages
@@ -1146,6 +1147,17 @@ async function collectNpmPackageDetail(npm_package: NpmPackage) {
         }
         let parts = name.split('@')
         if (parts.length > 2) {
+          // e.g. "_axios@0.17.1@axios", "_follow-redirects@1.2.6@follow-redirects"
+          if (
+            parts.length === 3 &&
+            parts[0] === '_' + parts[2] &&
+            is_semver(parts[1])
+          ) {
+            delete deps[name]
+            deps[parts[2]] = parts[1]
+            continue
+          }
+          console.log('invalid dependency name:', { name, parts })
           throw new Error('invalid dependency name: ' + name)
         }
       }
