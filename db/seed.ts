@@ -905,7 +905,7 @@ run(remove_invalid_npm_package_name)
 // e.g. "equire('bluebird'"
 // e.g. 'equire("../vinyl"'
 function fix_npm_package_name_with_bracket() {
-  let allow_list = ['express', 'log4js']
+  let allow_list = ['express', 'log4js', 'vinyl', 'bluebird']
   let skip_list = ['https']
   let rows = db.query(
     "select id, name from npm_package where name like 'equire(%'",
