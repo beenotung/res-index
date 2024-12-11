@@ -929,6 +929,9 @@ function fix_npm_package_name_with_bracket() {
       break
     }
     if (skip_list.includes(new_name)) {
+      console.log('\n' + 'skip package name:', { row, new_name })
+      unlinkNpmPackage(row.id)
+      deleteNpmPackage(row.id)
       continue
     }
     if (!allow_list.includes(new_name)) {
