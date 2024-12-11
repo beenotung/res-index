@@ -932,10 +932,10 @@ function fix_npm_package_name_with_bracket() {
       continue
     }
     if (!allow_list.includes(new_name)) {
-      console.log('unknown package name:', { row, new_name })
+      console.log('\n' + 'unknown package name:', { row, new_name })
       continue
     }
-    console.log('fix package name:', { row, new_name })
+    console.log('\n' + 'fix package name:', { row, new_name })
     rename_npm_package_by_name(old_name, new_name)
   }
 }
