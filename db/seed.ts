@@ -19,7 +19,7 @@ import { startTimer } from '@beenotung/tslib/timer'
 //
 // You can setup the database with initial config and sample data via the db proxy.
 
-let only: any = remove_invalid_npm_package_name
+let only: any = fix_npm_package_name_with_bracket
 
 function run(fn: () => unknown) {
   if (only && fn !== only) return
@@ -901,3 +901,42 @@ function remove_invalid_npm_package_name() {
   }
 }
 run(remove_invalid_npm_package_name)
+
+// e.g. "equire('bluebird'"
+// e.g. 'equire("../vinyl"'
+function fix_npm_package_name_with_bracket() {
+  let allow_list = ['express', 'log4js']
+  let skip_list = ['https']
+  let rows = db.query(
+    "select id, name from npm_package where name like 'equire(%'",
+  )
+  for (let row of rows) {
+    let old_name = row.name
+    let new_name = old_name.slice('equire('.length) as string
+    if (new_name.startsWith("'") && new_name.endsWith("'")) {
+      new_name = '"' + new_name.slice(1, -1) + '"'
+    }
+    new_name = JSON.parse(new_name)
+    for (;;) {
+      if (new_name.startsWith('../')) {
+        new_name = new_name.slice('../'.length)
+        continue
+      }
+      if (new_name.startsWith('./')) {
+        new_name = new_name.slice('../'.length)
+        continue
+      }
+      break
+    }
+    if (skip_list.includes(new_name)) {
+      continue
+    }
+    if (!allow_list.includes(new_name)) {
+      console.log('unknown package name:', { row, new_name })
+      continue
+    }
+    console.log('fix package name:', { row, new_name })
+    rename_npm_package_by_name(old_name, new_name)
+  }
+}
+run(fix_npm_package_name_with_bracket)
