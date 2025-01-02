@@ -33,26 +33,34 @@ import { getLanguageId } from './store'
 import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
 import { hashString } from './hash'
 import { is_semver } from '@beenotung/tslib/semver'
-import { fetch_safe, goto_safe } from './rate-limit'
+import { create_rate_limiter } from './rate-limit'
+
+let github_rate_limiter = create_rate_limiter('github')
+let npm_rate_limiter = create_rate_limiter('npm')
 
 // TODO get repo list from username (npm package > repo > username > repo list)
 // TODO continues updates each pages
 
 async function main() {
   let browser = await chromium.launch({ headless: true })
-  let page = new GracefulPage({ from: browser })
+  let githubPage = new GracefulPage({ from: browser })
+  let npmPage = new GracefulPage({ from: browser })
   if (proxy.repo.length == 0) {
-    await collectGithubRepositories(page, { username: 'beenotung', page: 1 })
+    await collectGithubRepositories(githubPage, {
+      username: 'beenotung',
+      page: 1,
+    })
   }
   if (proxy.npm_package.length == 0) {
-    await collectNpmPackages(page, { scope: 'beenotung' })
+    await collectNpmPackages(npmPage, { scope: 'beenotung' })
   }
   // await collectGithubRepoDetails(
   //   page,
   //   find(proxy.repo, { name: 'ts-liveview' })!,
   // )
-  await collectPendingPages(page)
-  await page.close()
+  await collectPendingPages({ githubPage, npmPage })
+  await githubPage.close()
+  await npmPage.close()
   await browser.close()
   console.log('done.')
 }
@@ -73,18 +81,17 @@ where page.check_time is null
 order by page.id asc
 `)
 
-async function collectPendingPages(page: GracefulPage) {
+async function collectPendingPages({
+  githubPage,
+  npmPage,
+}: {
+  githubPage: GracefulPage
+  npmPage: GracefulPage
+}) {
   let timer = startTimer('collect pending pages')
-  let dependent_rate_limited = false
-  let github_rate_limited = false
-  for (;;) {
+  type PendingPage = { id: number; url: string }
+  function getPendingPages() {
     let pages = select_pending_page.all()
-    if (pages.length == 0) break
-    if (dependent_rate_limited || github_rate_limited) {
-      await later(5000)
-      dependent_rate_limited = false
-      github_rate_limited = false
-    }
     pages.sort((a, b) => {
       // check for repo
       let a_matched = a.url.includes('beeno')
@@ -98,10 +105,33 @@ async function collectPendingPages(page: GracefulPage) {
       // fallback
       return 0
     })
-    timer.setEstimateProgress(pages.length)
+    let github_pages = []
+    let npm_pages = []
+    for (let page of pages) {
+      if (page.url.startsWith('https://github.com/')) {
+        github_pages.push(page)
+      } else if (
+        page.url.startsWith('https://registry.npmjs.org/') ||
+        page.url.startsWith(
+          'https://api.npmjs.org/downloads/point/last-week/',
+        ) ||
+        page.url.startsWith('https://www.npmjs.com/browse/depended/')
+      ) {
+        npm_pages.push(page)
+      } else if (find(proxy.repo, { page_id: page.id })) {
+        // e.g. "https://gitlab.com/plade/sdks/js"
+        // e.g. "https://git.reyah.ga/reyah/libraries/reyah-oauth-provider"
+        // TODO handle gitlab
+        continue
+      } else {
+        throw new Error(`unsupported page, url: ${page.url}`)
+      }
+    }
+    let total = pages.length
+    return { total, github_pages, npm_pages }
+  }
+  async function collectGithubPages(page: GracefulPage, pages: PendingPage[]) {
     for (let { id, url } of pages) {
-      // appendFileSync('log.txt', url + '\n')
-      // timer.progress(' > url: ' + url)
       if (
         // e.g. "https://github.com/beenotung?page=1&tab=repositories"
         url.startsWith('https://github.com/') &&
@@ -115,12 +145,16 @@ async function collectPendingPages(page: GracefulPage) {
         let repo = find(proxy.repo, { page_id: id! })
         if (!repo)
           throw new Error('failed to find repository from page, url: ' + url)
-        if (github_rate_limited) continue
-        let res = await collectGithubRepoDetails(page, repo)
-        if (res == 'rate limited') {
-          github_rate_limited = true
-        }
-      } else if (
+        await collectGithubRepoDetails(page, repo)
+      } else {
+        throw new Error(`unsupported page, url: ${url}`)
+      }
+      timer.tick()
+    }
+  }
+  async function collectNpmPages(page: GracefulPage, pages: PendingPage[]) {
+    for (let { id, url } of pages) {
+      if (
         // e.g. "https://registry.npmjs.org/@beenotung/tslib"
         url.startsWith('https://registry.npmjs.org/')
       ) {
@@ -140,24 +174,38 @@ async function collectPendingPages(page: GracefulPage) {
         // e.g. "https://www.npmjs.com/browse/depended/@beenotung/tslib?offset=0"
         url.startsWith('https://www.npmjs.com/browse/depended/')
       ) {
-        if (dependent_rate_limited) continue
         let res = await checkNpmPackageDependents(page, url)
-        if (res == 'rate limited') {
-          dependent_rate_limited = true
-        }
         if (res == 'not found') {
           proxy.page[id].check_time = Date.now()
         }
-      } else if (find(proxy.repo, { page_id: id! })) {
-        // e.g. "https://gitlab.com/plade/sdks/js"
-        // e.g. "https://git.reyah.ga/reyah/libraries/reyah-oauth-provider"
-        // TODO handle gitlab
-        continue
       } else {
         throw new Error(`unsupported page, url: ${url}`)
       }
       timer.tick()
     }
+  }
+  let pages = getPendingPages()
+  timer.setEstimateProgress(pages.total)
+  function refresh() {
+    pages = getPendingPages()
+    timer.setEstimateProgress(pages.total)
+  }
+  async function loopGithubPages() {
+    for (; pages.github_pages.length > 0; ) {
+      await collectGithubPages(githubPage, pages.github_pages)
+      refresh()
+    }
+    console.log('\n' + 'collect github pages done')
+  }
+  async function loopNpmPages() {
+    for (; pages.npm_pages.length > 0; ) {
+      await collectNpmPages(npmPage, pages.npm_pages)
+      refresh()
+    }
+    console.log('\n' + 'collect npm pages done')
+  }
+  for (; pages.total > 0; ) {
+    await Promise.all([loopGithubPages(), loopNpmPages()])
   }
   timer.end()
 }
@@ -185,7 +233,7 @@ async function checkGithubRepositories(
   indexUrl: string,
 ) {
   let username = new URL(indexUrl).pathname.replace('/', '')
-  await goto_safe(page, indexUrl)
+  await github_rate_limiter.goto_safe(page, indexUrl)
   let res = await page.evaluate(() => {
     let repos = Array.from(
       document.querySelectorAll('.public[itemprop="owns"]'),
@@ -327,7 +375,7 @@ let nullable_date = nullable(date())
 // FIXME handle case when it is private or deleted
 async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"
-  let response = await goto_safe(page, repo.url)
+  let response = await github_rate_limiter.goto_safe(page, repo.url)
   if (response?.status() == 429) {
     return 'rate limited' as const
   }
@@ -530,7 +578,7 @@ async function collectNpmPackages(
   options: { scope: string },
 ) {
   let indexUrl = `https://www.npmjs.com/~${options.scope}`
-  await goto_safe(page, indexUrl)
+  await npm_rate_limiter.goto_safe(page, indexUrl)
   for (;;) {
     let res = await page.evaluate(() => {
       let links =
@@ -887,7 +935,7 @@ function saveJSON(filename: string, payload: string) {
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let page = npm_package.page!
   let url = page!.url
-  let res = await fetch_safe(url)
+  let res = await npm_rate_limiter.fetch_safe(url)
   let payload = await res.text()
   let payloadHash = hashString(payload)
   saveJSON('npm.json', payload)
@@ -1242,7 +1290,7 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
       return 'not found' as const
     }
   }
-  let response = await goto_safe(page, indexUrl)
+  let response = await npm_rate_limiter.goto_safe(page, indexUrl)
   if (response?.status() == 429) {
     return 'rate limited' as const
   }
@@ -1352,7 +1400,7 @@ let npmPackageDownloadsParser = or([
 async function collectNpmPackageDownloads(npm_package: NpmPackage) {
   let page = npm_package.download_page!
   let url = page.url
-  let res = await fetch_safe(url)
+  let res = await npm_rate_limiter.fetch_safe(url)
   let payload = await res.text()
   let payloadHash = hashString(payload)
   // saveJSON('download.json', payload)
