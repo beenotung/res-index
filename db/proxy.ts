@@ -193,6 +193,14 @@ export type NpmPackageDependency = {
   type: ('prod' | 'dev' | 'peer' | 'optional')
 }
 
+export type CollectApiLog = {
+  id?: null | number
+  url: string
+  status: null | number
+  start_time: number
+  end_time: null | number
+}
+
 export type DBProxy = {
   method: Method[]
   url: Url[]
@@ -215,6 +223,7 @@ export type DBProxy = {
   npm_package: NpmPackage[]
   npm_package_keyword: NpmPackageKeyword[]
   npm_package_dependency: NpmPackageDependency[]
+  collect_api_log: CollectApiLog[]
 }
 
 export let proxy = proxySchema<DBProxy>({
@@ -281,5 +290,6 @@ export let proxy = proxySchema<DBProxy>({
       ['package', { field: 'package_id', table: 'npm_package' }],
       ['dependency', { field: 'dependency_id', table: 'npm_package' }],
     ],
+    collect_api_log: [],
   },
 })

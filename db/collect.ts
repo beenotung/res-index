@@ -33,6 +33,7 @@ import { getLanguageId } from './store'
 import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
 import { hashString } from './hash'
 import { is_semver } from '@beenotung/tslib/semver'
+import { fetch_safe, goto_safe } from './rate-limit'
 
 // TODO get repo list from username (npm package > repo > username > repo list)
 // TODO continues updates each pages
@@ -99,7 +100,7 @@ async function collectPendingPages(page: GracefulPage) {
     })
     timer.setEstimateProgress(pages.length)
     for (let { id, url } of pages) {
-      appendFileSync('log.txt', url + '\n')
+      // appendFileSync('log.txt', url + '\n')
       // timer.progress(' > url: ' + url)
       if (
         // e.g. "https://github.com/beenotung?page=1&tab=repositories"
@@ -184,7 +185,7 @@ async function checkGithubRepositories(
   indexUrl: string,
 ) {
   let username = new URL(indexUrl).pathname.replace('/', '')
-  await page.goto(indexUrl)
+  await goto_safe(page, indexUrl)
   let res = await page.evaluate(() => {
     let repos = Array.from(
       document.querySelectorAll('.public[itemprop="owns"]'),
@@ -326,7 +327,7 @@ let nullable_date = nullable(date())
 // FIXME handle case when it is private or deleted
 async function collectGithubRepoDetails(page: GracefulPage, repo: Repo) {
   // e.g. "https://github.com/beenotung/ts-liveview"
-  let response = await page.goto(repo.url)
+  let response = await goto_safe(page, repo.url)
   if (response?.status() == 429) {
     return 'rate limited' as const
   }
@@ -529,7 +530,7 @@ async function collectNpmPackages(
   options: { scope: string },
 ) {
   let indexUrl = `https://www.npmjs.com/~${options.scope}`
-  await page.goto(indexUrl)
+  await goto_safe(page, indexUrl)
   for (;;) {
     let res = await page.evaluate(() => {
       let links =
@@ -886,7 +887,7 @@ function saveJSON(filename: string, payload: string) {
 async function collectNpmPackageDetail(npm_package: NpmPackage) {
   let page = npm_package.page!
   let url = page!.url
-  let res = await fetch(url)
+  let res = await fetch_safe(url)
   let payload = await res.text()
   let payloadHash = hashString(payload)
   saveJSON('npm.json', payload)
@@ -1241,7 +1242,7 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
       return 'not found' as const
     }
   }
-  let response = await page.goto(indexUrl)
+  let response = await goto_safe(page, indexUrl)
   if (response?.status() == 429) {
     return 'rate limited' as const
   }
@@ -1333,7 +1334,7 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
     }
   })()
   if (nextHref) {
-    await checkNpmPackageDependents(page, nextHref)
+    return await checkNpmPackageDependents(page, nextHref)
   }
 }
 
@@ -1351,7 +1352,7 @@ let npmPackageDownloadsParser = or([
 async function collectNpmPackageDownloads(npm_package: NpmPackage) {
   let page = npm_package.download_page!
   let url = page.url
-  let res = await fetch(url)
+  let res = await fetch_safe(url)
   let payload = await res.text()
   let payloadHash = hashString(payload)
   // saveJSON('download.json', payload)
@@ -1391,10 +1392,6 @@ function getPageId(url: string): number {
     check_time: null,
     update_time: null,
   })
-}
-
-function fetch(url: string) {
-  return fetch_retry(url, 3)
 }
 
 if (process.argv[1] == __filename) {

@@ -8,4 +8,6 @@ dist
 .env.*
 !.env.example
 log.txt
-error.log
+*.log
+*.sqlite3*
+res/*.txt

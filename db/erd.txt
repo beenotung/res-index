@@ -186,7 +186,7 @@ has_types boolean NULL
 page_id integer unique FK >0- page.id
 download_page_id integer unique FK >0- page.id
 dependent_page_id integer unique FK >0- page.id
-not_found_time NULL
+not_found_time integer NULL
 
 
 npm_package_keyword
@@ -204,8 +204,17 @@ dependency_id integer FK >0- npm_package.id
 type enum('prod','dev','peer','optional')
 
 
+collect_api_log
+---------------
+id integer PK
+url text
+status integer NULL
+start_time integer
+end_time integer NULL
+
+
 # zoom: 1.000
-# view: (-282, 975)
+# view: (0, 0)
 # text-bg: #6495ed
 # text-color: #000000
 # diagram-bg: #f5f5f5
@@ -223,13 +232,14 @@ type enum('prod','dev','peer','optional')
 # user (450, 680)
 # verification_code (50, 550)
 # verification_attempt (50, 400)
-# page (76, 1528)
+# page (96, 1558)
 # programming_language (-312, 1219)
-# author (591, 1080)
+# author (634, 1077)
 # domain (-245, 1057)
 # repo (73, 1029)
-# keyword (1131, 969)
-# repo_keyword (648, 906)
-# npm_package (560, 1238)
-# npm_package_keyword (993, 1174)
-# npm_package_dependency (991, 1379)
+# keyword (1379, 1018)
+# repo_keyword (1012, 910)
+# npm_package (563, 1229)
+# npm_package_keyword (998, 1152)
+# npm_package_dependency (998, 1354)
+# collect_api_log (995, 1616)
