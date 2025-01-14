@@ -34,6 +34,7 @@ import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
 import { hashString } from './hash'
 import { is_semver } from '@beenotung/tslib/semver'
 import { create_rate_limiter } from './rate-limit'
+import { basename } from 'path'
 
 let github_rate_limiter = create_rate_limiter('github')
 let npm_rate_limiter = create_rate_limiter('npm')
@@ -1442,6 +1443,6 @@ function getPageId(url: string): number {
   })
 }
 
-if (process.argv[1] == __filename) {
+if (basename(process.argv[1]).startsWith('collect')) {
   main().catch(e => console.error(e))
 }
