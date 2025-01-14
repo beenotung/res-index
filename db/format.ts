@@ -298,3 +298,42 @@ function test() {
 // if (process.argv[1] == __filename) {
 //   test()
 // }
+
+export function parseNpmDependedUrl(url: string) {
+  // e.g. "https://www.npmjs.com/browse/depended/@DougAnderson444/kappa-view-list?offset=0"
+  let prefix = 'https://www.npmjs.com/browse/depended/'
+  if (!url.startsWith(prefix)) {
+    throw new Error('Invalid npm depended url, prefix not matched, url: ' + url)
+  }
+  // e.g. "@DougAnderson444/kappa-view-list" or "express"
+  let name = url.substring(prefix.length).split('?')[0]
+  let parts = name.split('/')
+
+  // e.g. "express"
+  if (parts.length == 1 && parts[0].length > 0) {
+    return { name }
+  }
+
+  // e.g. "@DougAnderson444/kappa-view-list"
+  if (
+    parts.length == 2 &&
+    name.startsWith('@') &&
+    parts[0].length > 0 &&
+    parts[1].length > 0
+  ) {
+    let scope = parseNpmPackageName(name).scope
+    return { scope, name }
+  }
+
+  throw new Error('Invalid npm depended url, invalid name, url: ' + url)
+}
+
+export function parseNpmPackageName(name: string) {
+  // e.g. "@DougAnderson444/kappa-view-list" -> "DougAnderson444"
+  let parts = name.split('/')
+  if (parts.length == 2 && parts[0].startsWith('@')) {
+    let scope = parts[0].substring(1)
+    return { scope }
+  }
+  throw new Error('Invalid npm package name: ' + name)
+}

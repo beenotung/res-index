@@ -28,7 +28,12 @@ import {
   InvalidInputError,
   ParserContext,
 } from 'cast.ts'
-import { cleanRepoUrl, parseRepoUrl } from './format'
+import {
+  cleanRepoUrl,
+  parseNpmDependedUrl,
+  parseNpmPackageName,
+  parseRepoUrl,
+} from './format'
 import { getLanguageId } from './store'
 import { npm_keywords_parser, parse_npm_keywords } from './parser/npm_keywords'
 import { hashString } from './hash'
@@ -662,6 +667,10 @@ export function storeNpmPackage(pkg: {
   name: string
   desc?: string | null
 }): number {
+  if (!pkg.scope && pkg.name.startsWith('@')) {
+    pkg.scope = parseNpmPackageName(pkg.name).scope
+  }
+
   /* npm package page */
   let package_page_url = `https://registry.npmjs.org/${pkg.name}`
   let package_page_id = getPageId(package_page_url)
@@ -1283,16 +1292,25 @@ async function collectNpmPackageDependents(page: GracefulPage, name: string) {
 }
 
 async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
+  let { scope, name } = parseNpmDependedUrl(indexUrl)
+  let npm_package = find(proxy.npm_package, { name })
+
   // check if the npm package is not found
-  {
-    let name = indexUrl.split('?')[0].split('/').slice(-2).join('/')
-    let row = find(proxy.npm_package, { name })
-    if (row?.not_found_time) {
-      return 'not found' as const
-    }
+  if (npm_package?.not_found_time) {
+    return 'not found' as const
   }
+
   let response = await npm_rate_limiter.goto_safe(page, indexUrl)
-  if (response?.status() == 429) {
+  let status = response?.status()
+  if (status == 404) {
+    if (!npm_package) {
+      let id = storeNpmPackage({ scope, name })
+      npm_package = proxy.npm_package[id]
+    }
+    npm_package.not_found_time = Date.now()
+    return 'not found' as const
+  }
+  if (status == 429) {
     return 'rate limited' as const
   }
   let res = await page.evaluate(() => {
