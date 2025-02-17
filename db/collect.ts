@@ -41,6 +41,8 @@ import { is_semver } from '@beenotung/tslib/semver'
 import { create_rate_limiter } from './rate-limit'
 import { basename } from 'path'
 
+let update_github_repo_list = false
+
 let github_rate_limiter = create_rate_limiter('github')
 let npm_rate_limiter = create_rate_limiter('npm')
 
@@ -51,7 +53,7 @@ async function main() {
   let browser = await chromium.launch({ headless: true })
   let githubPage = new GracefulPage({ from: browser })
   let npmPage = new GracefulPage({ from: browser })
-  if (proxy.repo.length == 0) {
+  if (proxy.repo.length == 0 || update_github_repo_list) {
     await collectGithubRepositories(githubPage, {
       username: 'beenotung',
       page: 1,
