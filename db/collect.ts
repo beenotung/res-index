@@ -42,6 +42,10 @@ import { create_rate_limiter } from './rate-limit'
 import { basename } from 'path'
 
 let update_github_repo_list = false
+// update_github_repo_list = true
+
+let update_npm_package_list = false
+// update_npm_package_list = true
 
 let github_rate_limiter = create_rate_limiter('github')
 let npm_rate_limiter = create_rate_limiter('npm')
@@ -59,7 +63,7 @@ async function main() {
       page: 1,
     })
   }
-  if (proxy.npm_package.length == 0) {
+  if (proxy.npm_package.length == 0 || update_npm_package_list) {
     await collectNpmPackages(npmPage, { scope: 'beenotung' })
   }
   // await collectGithubRepoDetails(
