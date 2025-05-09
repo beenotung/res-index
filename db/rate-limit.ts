@@ -1,6 +1,6 @@
 import { sleep } from '@beenotung/tslib/async/wait'
 import { appendFileSync, mkdirSync, writeFileSync } from 'fs'
-import { GracefulPage } from 'graceful-playwright'
+import { GotoError, GracefulPage } from 'graceful-playwright'
 import { proxy } from './proxy'
 import { db } from './db'
 import { standard_score } from '@beenotung/tslib/array'
@@ -94,7 +94,12 @@ export function create_rate_limiter(name: string) {
     for (;;) {
       last_attempt++
       let log_response = log_api_call(url)
-      let res = await page.goto(url)
+      let res = await page.goto(url).catch(e => {
+        if (e instanceof GotoError) {
+          return e.details.response
+        }
+        throw e
+      })
       if (!res) return res
       let status = res.status()
       log_response(status)
