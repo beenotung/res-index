@@ -218,6 +218,11 @@ function select_all(): ResItem[] {
 }
 
 let allItems = select_all()
+
+// deduplicate by url
+allItems = Array.from(new Map(allItems.map(item => [item.url, item])).values())
+
+// sort by name
 allItems.sort((a, b) => compare(a.sortKey, b.sortKey))
 
 function remove_unused_items() {
