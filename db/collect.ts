@@ -1346,6 +1346,10 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
           .querySelector('a[href*="/~"]')
           ?.getAttribute('href')
           ?.replace('/~', '')
+        // e.g. "@prosekit/extensions" is having the link to "https://gh.io/npm-docs-trusted-publishers" instead of "https://www.npmjs.com/~prosekit"
+        if (!scope && name.startsWith('@')) {
+          scope = name.split('/')[0].replace('@', '')
+        }
         if (!scope)
           throw new Error(
             'failed to parse scope (author) of npm package dependent',
