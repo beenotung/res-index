@@ -1353,10 +1353,10 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
         if (!scope && name == 'prosekit') {
           scope = 'prosekit'
         }
-        if (!scope)
-          throw new Error(
-            'failed to parse scope (author) of npm package dependent',
-          )
+        // if (!scope)
+        //   throw new Error(
+        //     'failed to parse scope (author) of npm package dependent',
+        //   )
         let desc =
           section.querySelector<HTMLParagraphElement>('p.lh-copy')?.innerText ||
           null
