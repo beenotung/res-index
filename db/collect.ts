@@ -1350,6 +1350,9 @@ async function checkNpmPackageDependents(page: GracefulPage, indexUrl: string) {
         if (!scope && name.startsWith('@')) {
           scope = name.split('/')[0].replace('@', '')
         }
+        if (!scope && name == 'prosekit') {
+          scope = 'prosekit'
+        }
         if (!scope)
           throw new Error(
             'failed to parse scope (author) of npm package dependent',
