@@ -54,7 +54,7 @@ let npm_rate_limiter = create_rate_limiter('npm')
 // TODO continues updates each pages
 
 async function main() {
-  let browser = await chromium.launch({ headless: true })
+  let browser = await chromium.launch({ headless: false })
   let githubPage = new GracefulPage({ from: browser })
   let npmPage = new GracefulPage({ from: browser })
   if (proxy.repo.length == 0 || update_github_repo_list) {

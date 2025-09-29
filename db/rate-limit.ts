@@ -88,6 +88,32 @@ export function create_rate_limiter(name: string) {
     }
   }
 
+  async function check_iframe(page: GracefulPage) {
+    return await page.evaluate(() => {
+      return !!document.querySelector(
+        'iframe[src*="https://challenges.cloudflare.com"]',
+      )
+    })
+  }
+
+  /**
+   * <div class="cf-wrapper cf-header cf-error-overview">
+   *   <h1 data-translate="block_headline">Sorry, you have been blocked</h1>
+   *   <h2 class="cf-subheadline"><span data-translate="unable_to_access">You are unable to access</span> example.com</h2>
+   * </div>
+   */
+  async function check_cloudflare_blocked(page: GracefulPage) {
+    return await page.evaluate(() => {
+      return !!document.querySelector(
+        '.cf-wrapper.cf-header.cf-error-overview [data-translate="block_headline"]',
+      )
+    })
+  }
+
+  async function check_manual_resolve(page: GracefulPage) {
+    return (await check_iframe(page)) || (await check_cloudflare_blocked(page))
+  }
+
   async function goto_safe(page: GracefulPage, url: string) {
     await wait_for_next_fetch()
     init()
@@ -108,6 +134,18 @@ export function create_rate_limiter(name: string) {
         await wait_for_retry(new Headers(res.headers()))
         continue
       }
+
+      // check for cloudflare iframe: https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/...
+      let need_manual_resolve = await check_manual_resolve(page)
+      if (need_manual_resolve) {
+        while (need_manual_resolve) {
+          console.log('please solve the challenge...')
+          await sleep(1000)
+          need_manual_resolve = await check_manual_resolve(page)
+        }
+        continue
+      }
+
       return res
     }
   }
