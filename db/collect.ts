@@ -93,6 +93,19 @@ where page.check_time is null
 order by page.id asc
 `)
 
+let select_pending_npm_page_by_author = db
+  .prepare<{ username: string }[], number>(
+    /* sql */ `
+select page.id
+from npm_package
+inner join author on author.id = npm_package.author_id
+inner join page on page.id = npm_package.page_id
+where author.username = :username
+  and page.check_time is null
+`,
+  )
+  .pluck()
+
 async function collectPendingPages({
   githubPage,
   npmPage,
@@ -104,6 +117,9 @@ async function collectPendingPages({
   type PendingPage = { id: number; url: string }
   function getPendingPages() {
     let pages = select_pending_page.all()
+    let pending_npm_page_ids = select_pending_npm_page_by_author.all({
+      username: 'beenotung',
+    })
     pages.sort((a, b) => {
       // check for repo
       let a_matched = a.url.includes('beeno')
@@ -112,7 +128,12 @@ async function collectPendingPages({
       if (a_matched && !b_matched) return -1
       if (!a_matched && b_matched) return 1
 
-      // TODO check for npm_package
+      // check for npm_package
+      a_matched = pending_npm_page_ids.includes(a.id)
+      b_matched = pending_npm_page_ids.includes(b.id)
+      if (a_matched && b_matched) return 0
+      if (a_matched && !b_matched) return -1
+      if (!a_matched && b_matched) return 1
 
       // fallback
       return 0
