@@ -120,20 +120,24 @@ connectWS({
     win.emitHref = emitHref
     win.emitForm = emitForm
     win.submitForm = submitForm
-    win.remount = mount
+    win.remount = () => mount('remount')
 
-    ws.ws.addEventListener('open', mount)
+    ws.ws.addEventListener('open', () => mount('mount'))
 
-    function mount() {
-      let language =
-        navigator && navigator.language ? navigator.language : undefined
+    function mount(type: 'mount' | 'remount' = 'mount') {
+      let language = Object.fromEntries(
+        document.cookie.split(';').map(s => s.trim().split('=')),
+      ).lang
+      if (!language && navigator) {
+        language = navigator.language
+      }
       let url = location.href.replace(origin, '')
       let timeZone = Intl
         ? Intl.DateTimeFormat().resolvedOptions().timeZone
         : undefined
       let timezoneOffset = new Date().getTimezoneOffset()
       let message: ClientMessage = [
-        'mount',
+        type,
         url,
         language,
         timeZone,
@@ -256,3 +260,69 @@ function upload(url: string, formData: FormData) {
   })
 }
 win.upload = upload
+
+win.fetch_json = (input, init) => {
+  return fetch(input, init)
+    .then(res =>
+      res.json().catch(error => ({
+        error: res.statusText || `Status Code: ${res.status}`,
+      })),
+    )
+    .catch(error => ({ error: String(error) }))
+    .then(json => {
+      if (json.error) {
+        showError(json.error)
+        reportError({
+          title: init?.title || 'fetch_json',
+          error: json.error,
+          api_url: input.toString(),
+        })
+      }
+      if (json.message) {
+        onServerMessage(json.message)
+      }
+      return json
+    })
+}
+
+function reportError(options: {
+  title: string
+  error: unknown
+  api_url: string
+}) {
+  fetch('/error-log', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: options.title,
+      error: String(options.error),
+      client_url: location.href,
+      api_url: options.api_url,
+      timestamp: Date.now(),
+    }),
+  }).catch(error => {
+    console.error('failed to report error:', error)
+    setTimeout(() => {
+      reportError(options)
+    }, 2000)
+  })
+}
+
+// in sweetalert client plugin
+declare function showAlert(title: string, icon: string): void
+
+function showError(error: unknown) {
+  if (typeof showAlert === 'function') {
+    showAlert(String(error), 'error')
+  } else {
+    alert(String(error))
+  }
+}
+win.showError = showError
+
+// fallback implementation before ws is connected
+win.goto ||= (url: string) => {
+  location.href = url
+}

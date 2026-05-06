@@ -3,9 +3,10 @@ import type { ManagedWebsocket } from '../ws/wss'
 import type { RouteContext } from 'url-router.ts'
 import type { Session } from './session'
 import type { PageRoute } from './routes'
-import { getContextCookies } from './cookie.js'
+import { getContextCookies, setContextCookie } from './cookie.js'
 import { EarlyTerminate, HttpError, MessageException } from '../exception.js'
 import type { ServerMessage } from '../../client/types'
+import { CookieOptions } from 'express'
 
 export type Context = StaticContext | DynamicContext
 
@@ -103,13 +104,25 @@ export function getContextSearchParams(
   return new URLSearchParams(search)
 }
 
+export function getCookieLang(context: Context) {
+  return getContextCookies(context)?.unsignedCookies.lang
+}
+
+export function setCookieLang(
+  context: Context,
+  lang: string,
+  options?: CookieOptions,
+) {
+  setContextCookie(context, 'lang', lang, options)
+}
+
 export function getContextLanguage(context: Context): string | undefined {
-  let lang = getContextCookies(context)?.unsignedCookies.lang
+  let lang = getCookieLang(context)
   if (lang) {
-    return lang
+    return fixLanguage(lang)
   }
   if (context.type === 'static') {
-    return context.language
+    return fixLanguage(context.language)
   }
   if (context.type === 'ws') {
     return fixLanguage(context.session.language)
@@ -123,7 +136,7 @@ export function getContextLanguage(context: Context): string | undefined {
   }
 }
 
-function fixLanguage(language: string | undefined): string | undefined {
+export function fixLanguage(language: string | undefined): string | undefined {
   if (!language || language === '*') {
     return
   }
@@ -134,6 +147,38 @@ export function getContextTimezone(context: Context): string | undefined {
   if (context.type === 'ws') {
     return context.session.timeZone
   }
+}
+
+export function getContextUserAgent(context: Context): string | undefined {
+  if (context.type === 'express') {
+    return context.req.headers['user-agent']
+  }
+  if (context.type === 'ws') {
+    return context.session.ws.request.headers['user-agent']
+  }
+}
+
+let mobileUserAgents = [
+  /Android/i,
+  /webOS/i,
+  /iPhone/i,
+  /iPad/i,
+  /iPod/i,
+  /BlackBerry/i,
+  /Windows Phone/i,
+  /Mobile/i,
+]
+
+export function getContextIsMobile(context: Context): boolean | undefined {
+  let userAgent = getContextUserAgent(context)
+  if (!userAgent) return undefined
+  return mobileUserAgents.some(pattern => pattern.test(userAgent))
+}
+
+export function getContextIsDesktop(context: Context): boolean | undefined {
+  let userAgent = getContextUserAgent(context)
+  if (!userAgent) return undefined
+  return mobileUserAgents.every(pattern => !pattern.test(userAgent))
 }
 
 export function isAjax(context: Context): boolean {
@@ -147,16 +192,19 @@ export function throwIfInAPI(
   selector: string,
   context: Context,
 ) {
-  let message: ServerMessage =
+  let message: ServerMessage = [
+    'batch',
     error instanceof MessageException
-      ? error.message
-      : [
-          'batch',
-          [
-            ['update-text', selector, String(error)],
-            ['add-class', selector, 'error'],
-          ],
+      ? [
+          ['update-text', selector, ''],
+          ['remove-class', selector, 'error'],
+          error.message,
         ]
+      : [
+          ['update-text', selector, String(error)],
+          ['add-class', selector, 'error'],
+        ],
+  ]
   if (context.type == 'ws') {
     context.ws.send(message)
     throw EarlyTerminate

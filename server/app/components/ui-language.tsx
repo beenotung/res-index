@@ -3,6 +3,7 @@ import {
   DynamicContext,
   getContextLanguage,
   getContextSearchParams,
+  setCookieLang,
 } from '../context.js'
 import { o } from '../jsx/jsx.js'
 import { ResolvedPageRoute, Routes } from '../routes.js'
@@ -10,36 +11,49 @@ import { Raw } from './raw.js'
 import { apiEndpointTitle } from '../../config.js'
 import { toRouteUrl } from '../../url.js'
 import { Redirect } from './router.js'
+import { languages, Locale } from './locale.js'
+import { mapArray } from './fragment.js'
+import { YEAR } from '@beenotung/tslib/time.js'
+import { MessageException } from '../../exception.js'
 
-export function PickLanguage(attrs: { style?: string }, context: Context) {
+export let language_max_age = (20 * YEAR) / 1000
+
+export function PickLanguage(
+  attrs: {
+    style?: string
+    /** default is horizontal */
+    direction?: 'vertical' | 'horizontal'
+  },
+  context: Context,
+) {
   let lang = getContextLanguage(context)
   let return_url = context.type == 'static' ? '' : context.url
+  let style = attrs.style || ''
+  if (attrs.direction === 'vertical') {
+    style += '; display: flex; flex-direction: column; gap: 0.5rem;'
+  }
   return (
-    <div style={attrs.style}>
-      {lang === 'zh' ? 'Language' : '界面語言'}:{' '}
-      <a
-        onclick="switchLang(event, 'zh')"
-        href={toRouteUrl(routes, '/set-lang/:lang', {
-          params: { lang: 'zh' },
-          query: { return_url },
-        })}
-      >
-        <button>繁體中文</button>
-      </a>{' '}
-      |{' '}
-      <a
-        onclick="switchLang(event, 'en')"
-        href={toRouteUrl(routes, '/set-lang/:lang', {
-          params: { lang: 'en' },
-          query: { return_url },
-        })}
-      >
-        <button>English</button>
-      </a>
+    <div style={style}>
+      🌏 <Locale en="Language" zh_hk="語言" zh_cn="语言" />:{' '}
+      {mapArray(
+        languages,
+        lang => (
+          <a
+            onclick={`switchLang(event, '${lang.code}')`}
+            href={toRouteUrl(routes, '/set-lang/:lang', {
+              params: { lang: lang.code },
+              query: { return_url },
+            })}
+          >
+            <button>{lang.name}</button>
+          </a>
+        ),
+        attrs.direction === 'vertical' ? null : ' | ',
+      )}
       {Raw(/* html */ `
 <script>
 function switchLang(event, lang){
-  document.cookie = 'lang=' + lang + ';SameSite=Lax;path=/'
+  document.cookie = 'lang=' + lang + ';SameSite=Lax;path=/;max-age=${language_max_age}'
   remount()
   event.preventDefault()
 }
@@ -51,16 +65,25 @@ function switchLang(event, lang){
 
 function submit(context: DynamicContext): ResolvedPageRoute {
   let lang = context.routerMatch?.params.lang
-  let return_url = getContextSearchParams(context)?.get('return_url')
-  if (context.type == 'express') {
-    context.res.cookie('lang', lang, {
-      sameSite: 'lax',
-      path: '/',
-    })
-  } else {
-    let cookie = 'lang=' + lang + ';SameSite=Lax;path=/'
-    context.ws.send(['set-cookie', cookie])
+  setCookieLang(context, lang, {
+    sameSite: 'lax',
+    path: '/',
+    maxAge: language_max_age,
+  })
+  let return_url =
+    (context.type === 'ws' && (context.args?.[0] as string)) ||
+    getContextSearchParams(context)?.get('return_url')
+
+  if (context.type === 'ws' && return_url) {
+    throw new MessageException([
+      'batch',
+      [
+        ['add-class', 'body', 'no-animation'],
+        ['redirect', return_url],
+      ],
+    ])
   }
+
   return {
     title: apiEndpointTitle,
     description: 'set the locale language',

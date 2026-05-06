@@ -108,20 +108,75 @@ async function postBuild() {
     await main()
     return
   }
-  fix()
+  await fix()
   if (mode == 'serve') {
     restartServer()
   }
 }
-function fix() {
-  let file = path.join('dist', 'db', 'proxy.js')
+async function fix() {
+  let last_line = ''
+  function update(new_line) {
+    if (last_line) {
+      process.stdout.write(
+        '\r' + ' '.repeat(last_line.length) + '\r' + new_line,
+      )
+    } else {
+      process.stdout.write(new_line)
+    }
+    last_line = new_line
+  }
+  let context = { update }
+  let ps = []
+  ps.push(fix_import(context, ['dist', 'db', 'proxy.js'], ['./db']))
+  await Promise.all(ps)
+  if (last_line) {
+    update('')
+    console.log()
+  }
+}
+async function fix_import(context, file, import_paths) {
+  file = Array.isArray(file) ? path.join(...file) : file
+  await wait_file(context, file)
   let text = fs.readFileSync(file).toString()
-  if (!text.includes(`import { db } from "./db"`)) return
-  text = text.replace(
-    `import { db } from "./db"`,
-    `import { db } from "./db.js"`,
-  )
-  fs.writeFileSync(file, text)
+  let new_text = text
+  for (let import_path2 of import_paths) {
+    new_text = new_text.replace(
+      ` from "${import_path2}"`,
+      ` from "${import_path2}.js"`,
+    )
+  }
+  if (new_text === text) return
+  fs.writeFileSync(file, new_text)
+}
+async function wait_file(context, file) {
+  let wait_intervals = [10, 20, 50, 100, 200, 250, 500, 1e3]
+  let default_interval = wait_intervals.pop()
+  let start_time = Date.now()
+  while (!fs.existsSync(file)) {
+    let passed = Date.now() - start_time
+    if (passed === 0) {
+      context.update(`waiting file: ${file}`)
+    } else {
+      context.update(`waiting file: ${file} (for ${format_time(passed)})`)
+    }
+    let interval = wait_intervals.shift() || default_interval
+    await new Promise(resolve => setTimeout(resolve, interval))
+  }
+}
+function format_time(time) {
+  if (time < 1e3) {
+    return time + 'ms'
+  }
+  if (time < 1e3 * 2) {
+    return (time / 1e3).toFixed(1) + 's'
+  }
+  if (time < 1e3 * 60) {
+    return (time / 1e3).toFixed(0) + 's'
+  }
+  if (time < 1e3 * 60 * 60) {
+    return (time / 1e3 / 60).toFixed(1) + 'min'
+  }
+  return (time / 1e3 / 60 / 60).toFixed(1) + 'hr'
 }
 let stopServer = () => Promise.resolve()
 let EPOCH = 0
@@ -153,4 +208,13 @@ async function restartServer() {
     }
     return stopServerPromise
   }
+  process.on('SIGINT', () => {
+    server.kill('SIGINT')
+  })
+  process.on('SIGTERM', () => {
+    server.kill('SIGTERM')
+  })
+  process.on('exit', () => {
+    server.kill()
+  })
 }

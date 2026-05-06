@@ -256,7 +256,7 @@ function brideToFn<Fn extends (input: any) => any>(
 
 namespace sync_with_remote_v2 {
   type IDRange = [start: number, end: number]
-  type Table = keyof typeof proxy
+  type Table = keyof typeof proxy & string
   export async function main() {
     let tables_atom_first: Table[] = [
       'page',
@@ -485,7 +485,8 @@ namespace sync_with_remote_v2 {
       await trim_table(i, table)
       // await delete_removed_data(i, table)
     }
-    if ('use exported data') {
+    let use_exported_data = true
+    if (use_exported_data) {
       return
     }
     i = 0

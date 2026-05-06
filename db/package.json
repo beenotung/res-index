@@ -11,36 +11,37 @@
     "test": "ts-node test",
     "ui": "erd-ui",
     "setup": "run-s migrate seed",
-    "dev": "run-s migrate update",
-    "update": "run-s gen-migrate migrate gen-proxy",
-    "rename": "auto-migrate --rename ../data/db.sqlite3 < erd.txt",
-    "gen-migrate": "auto-migrate ../data/db.sqlite3 < erd.txt",
+    "dev": "run-s migrate plan update",
     "migrate": "knex migrate:latest",
+    "plan": "auto-migrate ../data/db.sqlite3 < erd.txt",
+    "rename": "auto-migrate --rename ../data/db.sqlite3 < erd.txt",
+    "update": "run-s migrate gen-proxy",
     "seed": "ts-node seed.ts",
     "gen-proxy": "erd-to-proxy < erd.txt > proxy.ts"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
   "dependencies": {
-    "@beenotung/tslib": "^24.6.2",
-    "better-sqlite3-proxy": "^2.11.0",
-    "better-sqlite3-schema": "^3.1.8",
-    "cast.ts": "^1.17.3",
+    "@beenotung/tslib": "^24.24.0",
+    "better-sqlite3-proxy": "^2.11.4",
+    "better-sqlite3-schema": "^3.1.10",
+    "cast.ts": "^1.19.0",
     "graceful-playwright": "^1.5.0",
     "knex": "^3.1.0",
     "playwright": "^1.51.1",
     "populate-env": "^2.4.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/integer": "^4.0.3",
-    "@types/node": "^22.14.0",
+    "@types/node": "^24.11.0",
     "npm-run-all": "^4.1.5",
-    "quick-erd": "^4.27.0",
+    "quick-erd": "^4.34.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
+    "typescript": "^5.9.3"
   }
 }

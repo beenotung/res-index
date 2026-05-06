@@ -1,14 +1,21 @@
 import Swal, {
   SweetAlertIcon,
   SweetAlertOptions,
+  SweetAlertPosition,
 } from 'sweetalert2-unrestricted'
+import { client_config } from './client-config.js'
 
-function showToast(title: SweetAlertOptions['title'], icon: SweetAlertIcon) {
+function showToast(
+  title: SweetAlertOptions['title'],
+  icon: SweetAlertIcon,
+  position: SweetAlertPosition = 'top-end',
+  timer: number = client_config.toast_duration,
+) {
   const Toast = Swal.mixin({
     toast: true,
-    position: 'top-end',
+    position,
     showConfirmButton: false,
-    timer: 3000,
+    timer,
     timerProgressBar: true,
     didOpen: toast => {
       toast.onmouseenter = Swal.stopTimer
@@ -21,8 +28,11 @@ function showToast(title: SweetAlertOptions['title'], icon: SweetAlertIcon) {
   })
 }
 
-function showAlert(title: SweetAlertOptions['title'], icon: SweetAlertIcon) {
-  Swal.fire({
+async function showAlert(
+  title: SweetAlertOptions['title'],
+  icon: SweetAlertIcon,
+) {
+  await Swal.fire({
     title,
     icon,
     heightAuto: false,

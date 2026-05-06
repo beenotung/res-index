@@ -246,7 +246,7 @@ function applySelector(e: Element, selector: string) {
   if (tagNameMatch) {
     selector = selector.slice(tagNameMatch[0].length)
   }
-  for (let attrMatch of selector.matchAll(attrListRegex)) {
+  for (let attrMatch of Array.from(selector.matchAll(attrListRegex))) {
     selector = selector.replace(attrMatch[0], '')
     let key = attrMatch[1]
     let value = attrMatch[2]
@@ -264,7 +264,7 @@ function applySelector(e: Element, selector: string) {
     selector = selector.replace(idMatch[0], '')
     e.id = idMatch[1]
   }
-  for (let classMatch of selector.matchAll(classListRegex)) {
+  for (let classMatch of Array.from(selector.matchAll(classListRegex))) {
     selector = selector.replace(classMatch[0], '')
     e.classList.add(classMatch[1])
   }
@@ -274,11 +274,11 @@ function applySelector(e: Element, selector: string) {
 }
 
 function applyAttrs(e: Element, attrs: attrs) {
-  Object.entries(attrs).forEach(entry => {
-    if (entry[1] === null) {
-      e.removeAttribute(entry[0])
+  Object.entries(attrs).forEach(([name, value]) => {
+    if (value === undefined || value === null || value === false) {
+      e.removeAttribute(name)
     } else {
-      e.setAttribute(entry[0], entry[1] as string)
+      e.setAttribute(name, value as string)
     }
   })
   let input = e as HTMLInputElement

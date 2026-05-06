@@ -1,17 +1,34 @@
 import { apiEndpointTitle, title } from '../../config.js'
 import { commonTemplatePageText } from '../components/common-template.js'
 import { Link, Redirect } from '../components/router.js'
-import { DynamicContext, ExpressContext, getContextSearchParams } from '../context.js'
+import {
+  DynamicContext,
+  ExpressContext,
+  getContextFormBody,
+  getContextSearchParams,
+} from '../context.js'
 import { o } from '../jsx/jsx.js'
-import { Routes,  } from '../routes.js'
-import { proxy } from '../../../db/proxy.js'
-import { eraseUserIdFromCookie, getAuthUserId } from '../auth/user.js'
+import { PageRoute, Routes } from '../routes.js'
+import { proxy, User } from '../../../db/proxy.js'
+import {
+  eraseUserIdFromCookie,
+  getAuthUser,
+  getAuthUserId,
+} from '../auth/user.js'
 import { Router } from 'express'
 import { createUploadForm } from '../upload.js'
 import Style from '../components/style.js'
 import { renderError } from '../components/error.js'
 import { Raw } from '../components/raw.js'
 import { loadClientPlugin } from '../../client-plugin.js'
+import { formatTel } from '../components/tel.js'
+import { validateNickname, validateUsername } from '../validate/user.js'
+import { object, string } from 'cast.ts'
+import { MessageException } from '../../exception.js'
+import { Page } from '../components/page.js'
+import { Locale, Title } from '../components/locale.js'
+
+let pageTitle = <Locale en="Profile" zh_hk="帳戶" zh_cn="账户" />
 
 let style = Style(/* css */ `
 #profile .avatar {
@@ -21,6 +38,29 @@ let style = Style(/* css */ `
 #profile #previewImg {
   max-width: 160px;
   max-height: 160px;
+}
+#profile .field {
+  display: inline-flex;
+  margin: 0.25rem 0;
+}
+#profile .field span {
+  display: inline-block;
+  min-width: 7.5rem;
+}
+#profile .field input {
+  max-width: 40vw;
+}
+#profile .divider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 32rem;
+  opacity: 0.5;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+#profile .divider hr {
+  flex-grow: 1;
 }
 `)
 
@@ -32,23 +72,62 @@ let ProfilePage = (_attrs: {}, context: DynamicContext) => {
   let user_id = getAuthUserId(context)
 
   return (
-    <div id="profile">
+    <>
       {style}
-      <h1>Profile Page</h1>
-      <p>{commonTemplatePageText}</p>
-      {user_id ? (
-        renderProfile(user_id, context)
-      ) : (
-        <>
-          <p>You are viewing this page as guest.</p>
-          <p>
-            You can <Link href="/login">login</Link> or{' '}
-            <Link href="/register">register</Link> to manage your public profile
-            and exclusive content.
-          </p>
-        </>
-      )}
-    </div>
+      <Page id="profile" backHref="/app/more" title={pageTitle}>
+        <p>{commonTemplatePageText}</p>
+        {user_id ? (
+          renderProfile(user_id, context)
+        ) : (
+          <>
+            <p>
+              <Locale
+                en="You are viewing this page as guest."
+                zh_hk="您正在以訪客身份查看此頁面。"
+                zh_cn="您正在以访客身份查看此页面。"
+              />
+            </p>
+            <p>
+              <Locale
+                en={
+                  <>
+                    You can <Link href="/login">login</Link> or{' '}
+                    <Link href="/register">register</Link> to manage your public
+                    profile and exclusive content.
+                  </>
+                }
+                zh_hk={
+                  <>
+                    您可以 <Link href="/login">登入</Link> 或{' '}
+                    <Link href="/register">註冊</Link>{' '}
+                    以管理您的公開帳戶和專屬內容。
+                  </>
+                }
+                zh_cn={
+                  <>
+                    您可以 <Link href="/login">登录</Link> 或{' '}
+                    <Link href="/register">注册</Link>{' '}
+                    以管理您的公开账户和专属内容。
+                  </>
+                }
+              />
+            </p>
+          </>
+        )}
+      </Page>
+    </>
+  )
+}
+
+let toastPlugin = loadClientPlugin({ entryFile: 'dist/client/sweetalert.js' })
+
+export function getDisplayName(user: User) {
+  return (
+    user.nickname ||
+    user.username ||
+    user.email ||
+    formatTel(user.tel) ||
+    `user-${user.id}`
   )
 }
 
@@ -58,25 +137,139 @@ function renderProfile(user_id: number, context: DynamicContext) {
   let error = params?.get('error')
   return (
     <>
-      <p>Welcome back, {user.username || user.email}</p>
+      <p>
+        <Locale en="Welcome back, " zh_hk="歡迎回來，" zh_cn="欢迎回来，" />
+        {getDisplayName(user)}
+      </p>
+      <div class="divider">
+        <hr />
+        <span>
+          <Locale en="For login" zh_hk="登入資訊" zh_cn="登录信息" />
+        </span>
+        <hr />
+      </div>
+      <div>
+        <label class="field">
+          <span>
+            <Locale en="User ID: " zh_hk="用戶 ID: " zh_cn="用户 ID: " />
+          </span>
+          <span>{user_id}</span>
+        </label>
+      </div>
+      <form
+        method="POST"
+        action="/profile/username/submit"
+        onsubmit="emitForm(event)"
+      >
+        <label class="field">
+          <span>
+            <Locale en="Username: " zh_hk="用戶名: " zh_cn="用户名: " />
+          </span>
+          <input
+            type="text"
+            name="username"
+            autocomplete="off"
+            value={user.username}
+            data-value={user.username}
+            oninput="submitUsernameBtn.disabled = this.value === this.dataset.value || !this.value"
+          />
+        </label>{' '}
+        <button type="submit" id="submitUsernameBtn" disabled>
+          <Locale en="Change" zh_hk="更改" zh_cn="更改" />
+        </button>
+      </form>
+      <form method="POST" action="/verify/submit" onsubmit="emitForm(event)">
+        <input name="tel" hidden />
+        <label class="field">
+          <span>
+            <Locale en="Email: " zh_hk="電郵地址: " zh_cn="邮箱地址: " />
+          </span>
+          <input
+            type="email"
+            name="email"
+            autocomplete="email"
+            value={user.email}
+            data-value={user.email}
+            oninput="submitEmailBtn.disabled = this.value === this.dataset.value || !this.value"
+          />
+        </label>{' '}
+        <button type="submit" id="submitEmailBtn" disabled>
+          <Locale en="Verify" zh_hk="驗證" zh_cn="验证" />
+        </button>
+      </form>
+      <form method="POST" action="/verify/submit" onsubmit="emitForm(event)">
+        <input name="email" hidden />
+        <label class="field">
+          <span>
+            <Locale en="Phone number: " zh_hk="電話號碼: " zh_cn="电话号码: " />
+          </span>
+          <input
+            type="tel"
+            name="tel"
+            autocomplete="tel"
+            value={user.tel}
+            data-value={user.tel}
+            oninput="submitTelBtn.disabled = this.value === this.dataset.value || !this.value"
+          />
+        </label>{' '}
+        <button type="submit" id="submitTelBtn" disabled>
+          <Locale en="Verify" zh_hk="驗證" zh_cn="验证" />
+        </button>
+      </form>
+      <div class="divider">
+        <hr />
+        <span>
+          <Locale en="For display" zh_hk="顯示資訊" zh_cn="显示信息" />
+        </span>
+        <hr />
+      </div>
+      <form
+        method="POST"
+        action="/profile/nickname/submit"
+        onsubmit="emitForm(event)"
+      >
+        <label class="field">
+          <span>
+            <Locale en="Nickname: " zh_hk="稱呼: " zh_cn="称呼: " />
+          </span>
+          <input
+            type="text"
+            name="nickname"
+            autocomplete="off"
+            value={user.nickname}
+            data-value={user.nickname}
+            oninput="submitNicknameBtn.disabled = this.value === this.dataset.value || !this.value"
+          />
+        </label>{' '}
+        <button type="submit" id="submitNicknameBtn" disabled>
+          <Locale en="Change" zh_hk="更改" zh_cn="更改" />
+        </button>
+      </form>
       <form
         method="POST"
         action="/avatar"
         enctype="multipart/form-data"
         style="margin-bottom: 1rem"
       >
-        <div>
-          Avatar:
+        <label class="field">
+          <span>
+            <Locale en="Avatar: " zh_hk="頭像: " zh_cn="头像: " />
+          </span>
           {user.avatar ? (
-            <div>
-              <img class="avatar" src={'/uploads/' + user.avatar} />
-            </div>
+            <img class="avatar" src={'/uploads/' + user.avatar} />
           ) : (
-            ' (none)'
+            <Locale en=" (none)" zh_hk=" (無)" zh_cn=" (无)" />
           )}
-        </div>
-        <label>
-          Change avatar:{' '}
+        </label>
+        <div></div>
+        <label class="field">
+          <span>
+            <Locale
+              en="Change avatar: "
+              zh_hk="更改頭像: "
+              zh_cn="更改头像: "
+            />
+          </span>
           <input
             type="file"
             name="avatar"
@@ -106,30 +299,72 @@ async function previewAvatar(input) {
   previewContainer.hidden = false
 }
 </script>
+${toastPlugin.script}
 `)}
       </form>
+      <hr style="margin-bottom: 2rem" />
+      {/* TODO make a popup confirm for logout */}
       <a href="/logout" rel="nofollow">
-        Logout
+        <Locale en="Logout" zh_hk="登出" zh_cn="登出" />
       </a>
     </>
   )
 }
 
-function Logout(_attrs: {}, context: ExpressContext) {
+function Logout(_attrs: {}, context: DynamicContext) {
+  if (context.type === 'ws') {
+    // cannot set the cookie in ws context, ask the browser to redirect
+    throw new MessageException(['eval', `window.location.href = '/logout'`])
+  }
   eraseUserIdFromCookie(context.res)
   return <Redirect href="/login" />
 }
 
 export function UserMessageInGuestView(attrs: { user_id: number }) {
   let user = proxy.user[attrs.user_id]
+  let name = getDisplayName(user)
   return (
     <>
       <p>
-        You have login as <b>{user.username || user.email}</b>.
+        <Locale
+          en={
+            <>
+              You have login as <b>{name}</b>.
+            </>
+          }
+          zh_hk={
+            <>
+              您已登入為 <b>{name}</b>。
+            </>
+          }
+          zh_cn={
+            <>
+              您已登录为 <b>{name}</b>。
+            </>
+          }
+        />
       </p>
       <p>
-        You can go to <Link href="/profile">profile page</Link> to manage your
-        public profile and exclusive content.
+        <Locale
+          en={
+            <>
+              You can go to <Link href="/profile">profile page</Link> to manage
+              your public profile and exclusive content.
+            </>
+          }
+          zh_hk={
+            <>
+              您可以前往 <Link href="/profile">帳戶頁面</Link>{' '}
+              以管理您的公開帳戶和專屬內容。
+            </>
+          }
+          zh_cn={
+            <>
+              您可以前往 <Link href="/profile">账户页面</Link>{' '}
+              以管理您的公开账户和专属内容。
+            </>
+          }
+        />
       </p>
     </>
   )
@@ -168,13 +403,122 @@ function attachRoutes(app: Router) {
   })
 }
 
+let changeUsernameParser = object({
+  username: string(),
+})
+
+function ChangeUsername(attrs: {}, context: DynamicContext) {
+  let user = getAuthUser(context)
+  if (!user) throw 'not login'
+
+  let body = getContextFormBody(context)
+  let { username } = changeUsernameParser.parse(body)
+
+  if (user.username !== username) {
+    let result = validateUsername(username)
+    if (result.type === 'ok') {
+      user.username = username
+      if (context.type === 'ws') {
+        throw new MessageException([
+          'batch',
+          [
+            ['eval', `showToast('updated username','success')`],
+            [
+              'update-attrs',
+              'input[name="username"]',
+              {
+                'value': username,
+                'data-value': username,
+              },
+            ],
+            ['update-props', '#submitUsernameBtn', { disabled: true }],
+          ],
+        ])
+      }
+    } else {
+      if (context.type === 'ws') {
+        throw new MessageException([
+          'eval',
+          `showAlert(${JSON.stringify(result.text)},'warning')`,
+        ])
+      }
+    }
+  }
+
+  return <Redirect href="/profile" />
+}
+
+let changeNicknameParser = object({
+  nickname: string(),
+})
+
+function ChangeNickname(attrs: {}, context: DynamicContext) {
+  let user = getAuthUser(context)
+  if (!user) throw 'not login'
+
+  let body = getContextFormBody(context)
+  let { nickname } = changeNicknameParser.parse(body)
+
+  if (user.nickname !== nickname) {
+    let result = validateNickname(nickname)
+    if (result.type === 'ok') {
+      user.nickname = nickname
+      if (context.type === 'ws') {
+        throw new MessageException([
+          'batch',
+          [
+            ['eval', `showToast('updated nickname','success')`],
+            [
+              'update-attrs',
+              'input[name="nickname"]',
+              {
+                'value': nickname,
+                'data-value': nickname,
+              },
+            ],
+            ['update-props', '#submitNicknameBtn', { disabled: true }],
+          ],
+        ])
+      }
+    } else {
+      if (context.type === 'ws') {
+        throw new MessageException([
+          'eval',
+          `showAlert(${JSON.stringify(result.text)},'warning')`,
+        ])
+      }
+    }
+  }
+
+  return <Redirect href="/profile" />
+}
+
 let routes = {
   '/profile': {
-    title: title('Profile Page'),
-    description: `Manage your public profile and exclusive content`,
-    menuText: 'Profile',
+    title: <Title t={pageTitle} />,
+    description: (
+      <Locale
+        en="Manage your public profile and exclusive content"
+        zh_hk="管理您的公開帳戶和專屬內容"
+        zh_cn="管理您的公开账户和专属内容"
+      />
+    ),
+    menuText: pageTitle,
+    adminOnly: true,
     userOnly: true,
     node: <ProfilePage />,
+  },
+  '/profile/username/submit': {
+    title: apiEndpointTitle,
+    description: 'change username',
+    streaming: false,
+    node: <ChangeUsername />,
+  },
+  '/profile/nickname/submit': {
+    title: apiEndpointTitle,
+    description: 'change nickname',
+    streaming: false,
+    node: <ChangeNickname />,
   },
   '/logout': {
     title: apiEndpointTitle,

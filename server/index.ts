@@ -15,11 +15,16 @@ import { logRequest } from './app/log.js'
 import { clearInvalidUserId } from './app/auth/user.js'
 import { env } from './env.js'
 import { HttpError, EarlyTerminate } from './exception.js'
+import { setCaddy } from './caddy.js'
 
 const log = debugLog('index.ts')
 log.enabled = true
 
 const app = express()
+
+// Enable trusted proxy behavior to use req.ip correctly
+app.set('trust proxy', true)
+
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server })
 listenWSSCookie(wss)
@@ -48,6 +53,15 @@ if (config.development) {
 }
 app.use('/js', express.static('build'))
 app.use('/uploads', express.static(env.UPLOAD_DIR))
+app.use('/npm/@ionic/core', express.static('node_modules/@ionic/core'))
+app.use('/npm/swiper', express.static('node_modules/swiper'))
+app.use('/npm/jquery', express.static('node_modules/jquery'))
+app.use('/npm/datatables.net', express.static('node_modules/datatables.net'))
+app.use(
+  '/npm/datatables.net-dt',
+  express.static('node_modules/datatables.net-dt'),
+)
+app.use('/npm/chart.js', express.static('node_modules/chart.js'))
 app.use(express.static('public'))
 
 app.use(express.json({ limit: '10mb' }))
@@ -69,6 +83,9 @@ app.use((error: HttpError, req: Request, res: Response, next: NextFunction) => {
 const port = env.PORT
 server.listen(port, () => {
   print(port)
+  if (env.CADDY_PROXY === 'enable') {
+    setCaddy(port)
+  }
   if (config.auto_open) {
     open(`http://localhost:${port}`)
   }

@@ -1,6 +1,6 @@
 # Database
 
-This session description the workflow related to `erd.txt` and database schema migration.
+This project uses **SQLite** with better-sqlite3-proxy and knex migrations. The setup is included and usable out of the box. This section describes the workflow related to `erd.txt` and database schema migration.
 
 ## Viewing database schema
 
@@ -25,12 +25,12 @@ Remark: cd to `db` if not done already
 Auto mode:
 
 1. update `erd.txt` with any text editor
-2. run `npm run update`
+2. run `npm run dev`
 
 Manual mode:
 
 1. update `erd.txt` with any text editor
-2. run `npm run gen-migrate`
+2. run `npm run plan`
 3. review the generated migration script in the `migrations` directory
 4. run `npm run migrate`
 5. run `npm run gen-proxy`

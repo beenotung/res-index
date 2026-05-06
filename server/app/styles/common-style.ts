@@ -51,7 +51,58 @@ code.inline-code {
   font-family: monospace;
 }
 
+.no-decoration {
+  text-decoration: none;
+}
+
 .ws_status--safe-area {
   margin-top: 3rem;
+}
+
+.hint-block {
+  border-inline-start: 3px solid #748;
+  background-color: #edf;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  width: fit-content;
+}
+
+.common-table {
+  border-collapse: collapse;
+}
+.common-table th {
+  background-color: #f0f0f0;
+}
+.common-table th,
+.common-table td {
+  border: 1px solid #ccc;
+  padding: 0.25rem 0.5rem;
+}
+
+@media (max-width: 525px) {
+  .hide-on-phone {
+    display: none;
+  }
+}
+
+@media (min-width: 526px) {
+  .hide-on-desktop {
+    display: none;
+  }
+}
+
+/* inline edit field */
+.inline-edit-field[data-mode="view"] .edit-mode {
+  display: none;
+}
+.inline-edit-field[data-mode="edit"] .view-mode {
+  display: none;
+}
+.inline-edit-field input {
+  margin-inline: 0.5rem;
+  padding: 0.25rem;
+}
+.inline-edit-field button {
+  margin-inline-start: 0.5rem;
 }
 `

@@ -4,6 +4,7 @@ import {
   dataURItoFile,
   resizeImage,
   toImage,
+  rotateImage,
 } from '@beenotung/tslib/image.js'
 import { client_config } from './client-config.js'
 import { selectImage } from '@beenotung/tslib/file.js'
@@ -35,36 +36,51 @@ async function selectPhotos(
     accept: options?.accept || '.jpg,.png,.webp,.heic,.gif',
     multiple: options?.multiple,
   })
-  return Promise.all(
-    files.map(async file => {
-      let image = await toImage(file)
-      let width = 720
-      let height = 720
-      let quality = 0.5
-      if (options) {
-        if ('size' in options) {
-          width = options.size
-          height = options.size
-        }
-        if ('width' in options) {
-          width = options.width
-        }
-        if ('height' in options) {
-          height = options.height
-        }
-        if (options.quality) {
-          quality = options.quality
-        }
-      }
-      let dataUrl = resizeImage(image, width, height, 'image/webp', quality)
-      file = dataURItoFile(dataUrl, file)
-      return { dataUrl, file }
-    }),
-  )
+  return Promise.all(files.map(file => compressImageFile(file, options)))
+}
+
+async function compressImageFile(
+  file: File,
+  options?: {
+    quality?: number
+  } & ({ size: number } | { width: number } | { height: number } | {}),
+) {
+  let image = await toImage(file)
+  let width = 720
+  let height = 720
+  let quality = 0.5
+  if (options) {
+    if ('size' in options) {
+      width = options.size
+      height = options.size
+    }
+    if ('width' in options) {
+      width = options.width
+    }
+    if ('height' in options) {
+      height = options.height
+    }
+    if (options.quality) {
+      quality = options.quality
+    }
+  }
+  let dataUrl = resizeImage(image, width, height, 'image/webp', quality)
+  file = dataURItoFile(dataUrl, file)
+  return { dataUrl, file }
+}
+
+async function rotateImageInline(image: HTMLImageElement) {
+  let canvas = rotateImage(image)
+  let dataUrl = canvas.toDataURL()
+  image.src = dataUrl
 }
 
 Object.assign(window, {
   compressPhotos,
   selectPhotos,
+  compressImageFile,
+  selectImage,
   format_byte,
+  rotateImage,
+  rotateImageInline,
 })

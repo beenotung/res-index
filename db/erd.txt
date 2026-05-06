@@ -21,6 +21,7 @@ id integer PK
 method_id integer FK >- method.id
 url_id integer FK >- url.id
 user_agent_id integer NULL FK >- user_agent.id
+geo_ip_id integer NULL FK >- geo_ip.id
 request_session_id integer NULL FK >0- request_session.id
 user_id integer NULL FK >0- user.id
 timestamp integer
@@ -36,6 +37,20 @@ url
 ---
 id integer PK
 url text unique
+
+
+geo_ip_parts
+------------
+id integer PK
+hash text unique
+content text
+
+
+geo_ip
+------
+id integer PK
+hash text unique
+content text
 
 
 user_agent
@@ -84,13 +99,27 @@ email varchar(320) NULL unique
 tel varchar(16) NULL unique
 avatar varchar(256) NULL
 is_admin boolean NULL
+nickname text NULL
+
+
+error_log
+---------
+id integer PK
+timestamp integer
+title text
+error text
+client_url_id integer FK >- url.id
+api_url_id integer FK >- url.id
+request_log_id integer FK >0- request_log.id
 
 
 verification_code
 -----------------
 id integer PK
+uuid text NULL unique
 passcode char(6)
-email varchar(320)
+email varchar(320) NULL
+tel varchar(16) NULL
 request_time integer
 revoke_time integer NULL
 match_id integer NULL FK >0- verification_attempt.id
@@ -101,7 +130,21 @@ verification_attempt
 --------------------
 id integer PK
 passcode char(6)
-email varchar(320)
+email varchar(320) NULL
+tel varchar(16) NULL
+
+
+content_report
+--------------
+id integer PK
+reporter_id integer NULL FK >0- user.id
+type text
+remark text NULL
+submit_time integer
+reviewer_id integer NULL FK >0- user.id
+review_time integer NULL
+accept_time integer NULL
+reject_time integer NULL
 
 
 page
@@ -224,14 +267,18 @@ end_time integer NULL
 # request_log (50, 120)
 # method (450, 15)
 # url (450, 130)
+# geo_ip_parts (46, 530)
+# geo_ip (45, 386)
 # user_agent (450, 245)
 # ua_type (845, 250)
 # ua_bot (845, 410)
 # ua_stat (715, 60)
 # request_session (450, 445)
 # user (450, 680)
+# error_log (627, 158)
 # verification_code (50, 550)
-# verification_attempt (50, 400)
+# verification_attempt (50, 372)
+# content_report (844, 573)
 # page (96, 1558)
 # programming_language (-312, 1219)
 # author (634, 1077)

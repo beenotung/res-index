@@ -1,6 +1,7 @@
 import type express from 'express'
 import About from './pages/about.js'
 import Dataset from './pages/dataset.js'
+import Privacy from './pages/privacy.js'
 import { capitalize } from '@beenotung/tslib/string.js'
 import { Router } from 'url-router.ts'
 import { LayoutType, config, title } from '../config.js'
@@ -17,11 +18,10 @@ import Register from './pages/register.js'
 import Profile from './pages/profile.js'
 import VerificationCode from './pages/verification-code.js'
 import type { MenuRoute } from './components/menu'
-import DemoToast from './pages/demo-toast.js'
+import DemoPlugin from './pages/demo-plugin.js'
 import type { renderWebTemplate } from '../../template/web.js'
-import { EarlyTerminate, MessageException } from '../exception.js'
-import { renderError } from './components/error.js'
-import type { VNode } from '../../client/jsx/types'
+import { VNode } from '../../client/jsx/types.js'
+import { evalAttrsLocale } from './components/locale.js'
 
 let titles: Record<string, string> = {}
 
@@ -74,17 +74,13 @@ let routeDict = {
   ...Home.routes,
   ...About.routes,
   ...Dataset.routes,
-  // ...DemoToast.routes,
-  '/user-agents': {
-    title: title('User Agents of Visitors'),
-    description: "User agents of this site's visitors",
-    menuText: 'User Agents',
-    node: UserAgents,
-  },
+  // ...DemoPlugin.routes,
+  ...UserAgents.routes,
   // ...Login.routes,
   // ...Register.routes,
   // ...Profile.routes,
   // ...VerificationCode.routes,
+  ...Privacy.routes,
 } satisfies Routes
 
 export let redirectDict: Record<string, string> = {
@@ -129,8 +125,15 @@ export function matchRoute(
   }
   context.routerMatch = match
   if ('resolve' in route) {
-    return then(route.resolve(context), res => Object.assign(route, res))
+    return then(route.resolve(context), res => {
+      let resolved = Object.assign(route, res)
+      evalAttrsLocale(resolved, 'title', context)
+      evalAttrsLocale(resolved, 'description', context)
+      return resolved
+    })
   }
+  evalAttrsLocale(route, 'title', context)
+  evalAttrsLocale(route, 'description', context)
   return route
 }
 
@@ -150,29 +153,7 @@ export function resolveExpressContext(
   return context
 }
 
-export function errorRoute(
-  error: unknown,
-  context: Context,
-  title: string,
-  description: string,
-): StaticPageRoute {
-  if (error == EarlyTerminate || error instanceof MessageException) {
-    throw error
-  }
-  if (context.type == 'ws' && typeof error == 'string') {
-    throw new MessageException([
-      'eval',
-      // `showToast(${JSON.stringify(error)},'error')`,
-      `showAlert(${JSON.stringify(error)},'error')`,
-    ])
-  }
-  return {
-    title,
-    description,
-    node: renderError(error, context),
-  }
-}
-
+// TODO setup robots.txt
 if (config.setup_robots_txt) {
   setTimeout(() => {
     console.log(Object.keys(routeDict).join('\n'))

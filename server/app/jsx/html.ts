@@ -12,8 +12,9 @@ import type {
 } from './types'
 import { HTMLStream, noop } from './stream.js'
 import { Flush } from '../components/flush.js'
-import { renderError, renderErrorNode } from '../components/error.js'
+import { renderError, renderErrorNode, showError } from '../components/error.js'
 import { EarlyTerminate, ErrorNode, MessageException } from '../../exception.js'
+import { evalLocale } from '../components/locale.js'
 
 const log = debug('html.ts')
 log.enabled = true
@@ -25,18 +26,24 @@ export function escapeHTMLTextContent(str: string): string {
   str = str.replace(/&/g, '&amp;')
   str = str.replace(/</g, '&lt;')
   str = str.replace(/>/g, '&gt;')
-  // str = str.replace(/"/g, '&quot;')
-  // str = str.replace(/'/g, '&#39;')
   return str
 }
 
 export function escapeHTMLAttributeValue(
   value: string | number | boolean,
 ): string {
-  if (typeof value === 'string' && value.includes('"')) {
-    return '"' + value.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"'
+  let type = typeof value
+  let str = String(value)
+  if (type === 'number' || type === 'boolean') {
+    return str
   }
-  return JSON.stringify(value).replaceAll('\\\\', '\\')
+  // using replace with /g is 8-10% faster than replaceAll
+  str = str.replace(/&/g, '&amp;')
+  str = str.replace(/</g, '&lt;')
+  str = str.replace(/>/g, '&gt;')
+  str = str.replace(/"/g, '&quot;')
+  str = str.replace(/'/g, '&#39;')
+  return `"${str}"`
 }
 
 // to be used in template that has already wrapped the attribute value in double quotes
@@ -130,6 +137,10 @@ export function writeNode(
         writeNode(stream, renderErrorNode(error, context), context)
       } else {
         console.error('Caught error from componentFn:', error)
+        if (context.type == 'ws') {
+          context.ws.send(showError(error))
+          throw EarlyTerminate
+        }
         writeNode(stream, renderError(error, context), context)
       }
     }
@@ -181,17 +192,14 @@ function writeElement(
   }
   if (attrs) {
     Object.entries(attrs).forEach(([name, value]) => {
-      if (value === undefined || value === null) return
-      switch (name) {
-        case 'class':
-        case 'className':
-        case 'style':
-          if (!value) {
-            return
-          }
+      value = evalLocale(value, context)
+      if (value === undefined || value === null || value === false) return
+      if (value === '' || value === true) {
+        html += ` ${name}`
+      } else {
+        value = escapeHTMLAttributeValue(value)
+        html += ` ${name}=${value}`
       }
-      value = escapeHTMLAttributeValue(value)
-      html += ` ${name}=${value}`
     })
   }
   html += '>'
@@ -202,6 +210,13 @@ function writeElement(
     case 'br':
     case 'hr':
     case 'meta':
+    case 'link':
+    case 'base':
+    case 'source':
+    case 'track':
+    case 'col':
+    case 'param':
+    case 'area':
       return
   }
   if (children) {

@@ -7,6 +7,7 @@ source scripts/config
 if [ -z "$MODE" ]; then
   echo "possible mode:"
   echo "  [f] first   (start new pm2 process)"
+  echo "  [u] upload   (for static files updates)"
   echo "  [q] quick   (for UI-only updates)"
   echo "  [d] data    (for data/*.json)"
   echo "  [ ] default (install dependencies and run database migration)"
@@ -15,6 +16,9 @@ fi
 case "$MODE" in
   f)
     MODE="first"
+    ;;
+  u)
+    MODE="upload"
     ;;
   q)
     MODE="quick"
@@ -30,7 +34,11 @@ echo "deploy mode: $MODE"
 
 set -x
 
-if [ "$MODE" == "quick" ]; then
+if [ "$MODE" == "upload" ]; then
+  rsync -SavLPz \
+    public \
+    "$user@$host:$root_dir"
+elif [ "$MODE" == "quick" ]; then
   rsync -SavLPz \
     server \
     client \
@@ -42,6 +50,7 @@ if [ "$MODE" == "quick" ]; then
     set -e
     source ~/.nvm/nvm.sh
     pm2 reload $pm2_name
+    pm2 logs $pm2_name
   "
 else
   npm run build
@@ -63,13 +72,10 @@ else
     db/*.ts \
     "$user@$host:$root_dir/db"
   if [ "$MODE" == "first" ]; then
-    ssh "$user@$host" "
-      set -e
-      cd $root_dir
-      mkdir -p data
-    "
+    rebuild_cmd="pnpm rebuild"
     pm2_cmd="cd $root_dir && pm2 start --name $pm2_name dist/server/index.js"
   else
+    rebuild_cmd=""
     pm2_cmd="pm2 reload $pm2_name"
   fi
   if [ "$MODE" == "data" ]; then
@@ -85,9 +91,13 @@ else
     source ~/.nvm/nvm.sh
     set -x
     cd $root_dir
+    mkdir -p data
     pnpm i -r
+    $rebuild_cmd
     cd db
+    $rebuild_cmd
     npm run setup
     $pm2_cmd
+    pm2 logs $pm2_name
   "
 fi

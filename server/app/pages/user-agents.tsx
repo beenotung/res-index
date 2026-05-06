@@ -1,15 +1,30 @@
 import { proxy } from '../../../db/proxy.js'
+import { pick } from 'better-sqlite3-proxy'
 import {
   getOtherUserAgents,
   getUAStatsProgress,
 } from '../../../db/user-agent.js'
+import { Locale, Title } from '../components/locale.js'
 import SourceCode from '../components/source-code.js'
 import Style from '../components/style.js'
+import { Context, getContextLanguage } from '../context.js'
 import { o } from '../jsx/jsx.js'
+import { Routes } from '../routes.js'
 
-function agentTable(title: string, rows: [name: string, count: number][]) {
+function agentTable(
+  title: string,
+  rows: [name: string, count: number][],
+  locales: string,
+) {
+  // skip rows with zero count
+  rows = rows.filter(row => row[1] > 0)
+
+  // skip empty table
   if (rows.length === 0) return
+
+  // sort by count descending
   rows.sort((a, b) => b[1] - a[1])
+
   return (
     <table>
       <thead>
@@ -23,7 +38,7 @@ function agentTable(title: string, rows: [name: string, count: number][]) {
           rows.map(([name, count]) => (
             <tr>
               <td>{name}</td>
-              <td>{count}</td>
+              <td>{count.toLocaleString(locales)}</td>
             </tr>
           )),
         ]}
@@ -32,21 +47,28 @@ function agentTable(title: string, rows: [name: string, count: number][]) {
   )
 }
 
-function Tables() {
+function Tables(attrs: {}, context: Context) {
+  let locales = getContextLanguage(context) || 'en-US'
   return (
     <>
       <p>{getUAStatsProgress()}</p>
       {agentTable(
         'User Agent',
-        proxy.ua_type.map(row => [row.name, row.count]),
+        pick(proxy.ua_type, ['name', 'count']).map(row => [
+          row.name,
+          row.count,
+        ]),
+        locales,
       )}
       {agentTable(
         'Bot Agent',
-        proxy.ua_bot.map(row => [row.name, row.count]),
+        pick(proxy.ua_bot, ['name', 'count']).map(row => [row.name, row.count]),
+        locales,
       )}
       {agentTable(
         'Other Agent',
         getOtherUserAgents().map(row => [row.user_agent, row.count]),
+        locales,
       )}
     </>
   )
@@ -78,4 +100,29 @@ let UserAgents = (
   </div>
 )
 
-export default UserAgents
+let routes = {
+  '/user-agents': {
+    menuText: <Locale en="Visitor Stats" zh_hk="訪客統計" zh_cn="访客统计" />,
+    title: (
+      <Title
+        t={
+          <Locale
+            en="User Agents of Visitors"
+            zh_hk="訪客的用戶代理"
+            zh_cn="访客的用戶代理"
+          />
+        }
+      />
+    ),
+    description: (
+      <Locale
+        en="User agents of this site's visitors"
+        zh_hk="此網站訪客的用戶代理資訊"
+        zh_cn="此网站访客的用户代理资讯"
+      />
+    ),
+    node: UserAgents,
+  },
+} satisfies Routes
+
+export default { routes }

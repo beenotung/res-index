@@ -33,6 +33,11 @@ id="$(echo "$title" | sed -r 's/ //g')"
 # e.g. user-agents
 url="$(echo "$name" | awk '{print tolower($0)}' | sed 's/ /-/g')"
 
+# snake_case
+# lowercase with underscore
+# e.g. user_agents
+table="$(echo "$url" | sed 's/-/_/g')"
+
 file="server/app/pages/$url.tsx"
 
 if [ -f "$file" ]; then
@@ -45,10 +50,11 @@ if [ -f "$file" ]; then
 fi
 
 cat "$template_file" \
-  | sed "s/__id__/$id/" \
-  | sed "s/__title__/$title/" \
-  | sed "s/__name__/$name/" \
-  | sed "s/__url__/$url/" \
+  | sed "s/__id__/$id/g" \
+  | sed "s/__title__/$title/g" \
+  | sed "s/__name__/$name/g" \
+  | sed "s/__url__/$url/g" \
+  | sed "s/__table__/$table/g" \
   > "$file"
 
 echo "saved to $file"

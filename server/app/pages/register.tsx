@@ -1,5 +1,4 @@
-import { LayoutType, apiEndpointTitle, config, title } from '../../config.js'
-import { commonTemplatePageText } from '../components/common-template.js'
+import { apiEndpointTitle, config } from '../../config.js'
 import { Link } from '../components/router.js'
 import Style from '../components/style.js'
 import {
@@ -11,16 +10,9 @@ import {
 import { EarlyTerminate } from '../../exception.js'
 import { o } from '../jsx/jsx.js'
 import { find } from 'better-sqlite3-proxy'
-import {
-  appleLogo,
-  facebookLogo,
-  githubLogo,
-  googleLogo,
-  instagramLogo,
-} from '../svgs/logo.js'
-import { proxy, User } from '../../../db/proxy.js'
+import { proxy } from '../../../db/proxy.js'
 import { ServerMessage } from '../../../client/types.js'
-import { is_email } from '@beenotung/tslib'
+import { is_email, to_full_hk_mobile_phone } from '@beenotung/tslib/validate.js'
 import { Raw } from '../components/raw.js'
 import { hashPassword } from '../../hash.js'
 import { Routes, StaticPageRoute } from '../routes.js'
@@ -29,17 +21,15 @@ import { renderError } from '../components/error.js'
 import { getWsCookies } from '../cookie.js'
 import { getAuthUserId } from '../auth/user.js'
 import { UserMessageInGuestView } from './profile.js'
-import { wsStatus } from '../components/ws-status.js'
+import { formatTel } from '../components/tel.js'
+import { validateUsername, ValidateUserResult } from '../validate/user.js'
+import { oauthProviderList } from '../components/oauth.js'
+import { ClearInputContext, Field, InputContext } from '../components/field.js'
+import { loadClientPlugin } from '../../client-plugin.js'
+import { Page } from '../components/page.js'
+import { Locale, Title } from '../components/locale.js'
 
 let style = Style(/* css */ `
-.oauth-provider-list a {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid #888;
-  padding: 0.25rem;
-  border-radius: 0.25rem;
-  margin: 0.25rem;
-}
 #register form .field {
   display: flex;
   flex-wrap: wrap;
@@ -60,27 +50,38 @@ let style = Style(/* css */ `
   display: block;
   margin-top: 0.25rem;
 }
-#register .hint {
-  border-inline-start: 3px solid #748;
-  background-color: #edf;
-  padding: 1rem;
-  margin: 0.5rem 0;
-  width: fit-content;
-}
 `)
 
+let sweetAlertPlugin = loadClientPlugin({
+  entryFile: 'dist/client/sweetalert.js',
+})
+
 let RegisterPage = (
-  <div id="register">
+  <>
     {style}
-    <h1>Register on {config.short_site_name}</h1>
-    <p hidden>{commonTemplatePageText}</p>
-    <p>
-      Welcome to {config.short_site_name}!
-      <br />
-      Let's begin the adventure~
-    </p>
-    <Main />
-  </div>
+    <Page
+      id="register"
+      title={<Title t={<Locale en="Register" zh_hk="註冊" zh_cn="注册" />} />}
+      backHref="/"
+      backText={<Locale en="Home" zh_hk="主頁" zh_cn="主页" />}
+    >
+      <p>
+        <Locale
+          en={`Welcome to ${config.short_site_name}!`}
+          zh_hk={`歡迎來到 ${config.short_site_name}！`}
+          zh_cn={`欢迎来到 ${config.short_site_name}！`}
+        />
+        <br />
+        <Locale
+          en="Let's begin the adventure~"
+          zh_hk="讓我們開始這場冒險吧~"
+          zh_cn="让我们开始这场冒险吧~"
+        />
+      </p>
+      <Main />
+    </Page>
+    {sweetAlertPlugin.node}
+  </>
 )
 
 function Main(_attrs: {}, context: Context) {
@@ -88,85 +89,157 @@ function Main(_attrs: {}, context: Context) {
   return user_id ? <UserMessageInGuestView user_id={user_id} /> : guestView
 }
 
-let useSocialLogin = true
-
-let emailFormBody = (
+let verifyFormBody = (
   <>
-    <Field
-      label="Email"
-      type="email"
-      name="email"
-      msgId="emailMsg"
-      oninput="emit('/register/check-email', this.value)"
-      autocomplete="email"
-    />
+    {config.enable_email && (
+      <Field
+        label={<Locale en="Email" zh_hk="電郵地址" zh_cn="电子邮件地址" />}
+        type="email"
+        name="email"
+        msgId="emailMsg"
+        oninput="emit('/register/check-email', this.value)"
+        autocomplete="email"
+        required
+        onchange={
+          config.enable_sms
+            ? 'event.target.form.tel.required = !this.value'
+            : undefined
+        }
+      />
+    )}
+    {config.enable_email && config.enable_sms && (
+      <div style="margin: 0.5rem 0">
+        <Locale en="or" zh_hk="或" zh_cn="或" />
+      </div>
+    )}
+    {config.enable_sms && (
+      <Field
+        label={<Locale en="Phone number" zh_hk="電話號碼" zh_cn="电话号码" />}
+        type="tel"
+        name="tel"
+        msgId="telMsg"
+        oninput="emit('/register/check-tel', this.value)"
+        autocomplete="tel"
+        required
+        onchange={
+          config.enable_email
+            ? 'event.target.form.email.required = !this.value'
+            : undefined
+        }
+      />
+    )}
     <div class="field">
       <label>
-        <input type="checkbox" name="include_link" /> Include magic link (more
-        convince but may be treated as spam)
+        <input type="checkbox" name="include_link" />{' '}
+        <Locale
+          en="Include magic link (more convenient but may be treated as spam)"
+          zh_hk="包含登入鏈接 (更方便但可能被視為垃圾郵件)"
+          zh_cn="包含登录链接 (更方便但可能被视为垃圾邮件)"
+        />
       </label>
     </div>
-    <input type="submit" value="Verify" />
+    <input
+      type="submit"
+      value={<Locale en="Verify" zh_hk="驗證" zh_cn="验证" />}
+    />
   </>
 )
 
 let guestView = (
   <>
     <p>
-      Already have an account? <Link href="/login">Login</Link>
+      <Locale
+        en={
+          <>
+            By continuing to use this service, you agree to our{' '}
+            <a href="/privacy">privacy policy</a>.
+          </>
+        }
+        zh_hk={
+          <>
+            繼續使用本服務即表示您同意我們的<a href="/privacy">私隱政策</a>。
+          </>
+        }
+        zh_cn={
+          <>
+            继续使用本服务即表示您同意我们的<a href="/privacy">隐私政策</a>。
+          </>
+        }
+      />
     </p>
-    <div class="flex-center flex-column"></div>
-    <div>Register with:</div>
-    {useSocialLogin ? (
+    {config.use_social_login && (
       <>
-        <div class="flex-center flex-column">
-          <div class="oauth-provider-list">
-            <a>{googleLogo}&nbsp;Google</a>
-            <a>{appleLogo}&nbsp;Apple</a>
-            <a>{githubLogo}&nbsp;GitHub</a>
-            <a>{facebookLogo}&nbsp;Facebook</a>
-            <a>{instagramLogo}&nbsp;Instagram</a>
-          </div>
+        <div class="separator-line flex-center">
+          <Locale
+            en="Register with social network"
+            zh_hk="使用社交網絡註冊"
+            zh_cn="使用社交网络注册"
+          />
         </div>
-        <div class="or-line flex-center">or</div>
+        <div class="flex-center flex-column">{oauthProviderList}</div>
       </>
-    ) : (
-      <div style="height: 0.5rem"></div>
     )}
-    <form
-      method="POST"
-      action="/verify/email/submit"
-      onsubmit="emitForm(event)"
-    >
-      {emailFormBody}
-    </form>
-    <div class="or-line flex-center">or</div>
-    <form method="POST" action="/register/submit" onsubmit="emitForm(event)">
-      <Field
-        label="Username"
-        name="username"
-        msgId="usernameMsg"
-        oninput="emit('/register/check-username', this.value)"
-        autocomplete="username"
-      />
-      <Field
-        label="Password"
-        type="password"
-        name="password"
-        msgId="passwordMsg"
-        oninput="emit('/register/check-password', this.value);this.form.confirm_password.value=''"
-        autocomplete="new-password"
-      />
+    {config.use_verification_code &&
+      (config.enable_email || config.enable_sms) && (
+        <>
+          <div class="separator-line flex-center">
+            <Locale
+              en="Register with verification code"
+              zh_hk="使用驗證碼註冊"
+              zh_cn="使用验证码注册"
+            />
+          </div>
+          <form
+            method="POST"
+            action="/verify/submit"
+            onsubmit="emitForm(event)"
+          >
+            {verifyFormBody}
+          </form>
+        </>
+      )}
+    {config.use_password_login && (
+      <>
+        <div class="separator-line flex-center">
+          <Locale
+            en="Register with password"
+            zh_hk="使用密碼註冊"
+            zh_cn="使用密码注册"
+          />
+        </div>
+        <form
+          id="verifyForm"
+          method="POST"
+          action="/register/submit"
+          onsubmit="emitForm(event)"
+        >
+          <Field
+            label={<Locale en="Username" zh_hk="用戶名" zh_cn="用户名" />}
+            name="username"
+            msgId="usernameMsg"
+            oninput="emit('/register/check-username', this.value)"
+            autocomplete="username"
+          />
+          <Field
+            label={<Locale en="Password" zh_hk="密碼" zh_cn="密码" />}
+            type="password"
+            name="password"
+            msgId="passwordMsg"
+            oninput="emit('/register/check-password', this.value);this.form.confirm_password.value=''"
+            autocomplete="new-password"
+          />
 
-      <Field
-        label="Confirm password"
-        type="password"
-        name="confirm_password"
-        msgId="confirmPasswordMsg"
-        oninput="checkPassword(this.form||this.closest('form'))"
-        autocomplete="new-password"
-      />
-      {Raw(/* html */ `<script>
+          <Field
+            label={
+              <Locale en="Confirm password" zh_hk="確認密碼" zh_cn="确认密码" />
+            }
+            type="password"
+            name="confirm_password"
+            msgId="confirmPasswordMsg"
+            oninput="checkPassword(this.form||this.closest('form'))"
+            autocomplete="new-password"
+          />
+          {Raw(/* html */ `<script>
 function checkPassword (form) {
   let c = form.confirm_password.value
   if (c.length == 0) {
@@ -183,154 +256,70 @@ function checkPassword (form) {
   confirmPasswordMsg.style.color = 'green'
 }
 </script>`)}
-      <input type="submit" value="Register" />
-      <ClearInputContext />
-    </form>
-    <div class="hint">
-      Your password is not be stored in plain text.
-      <br />
-      Instead, it is processed with{' '}
-      <a href="https://en.wikipedia.org/wiki/Argon2" target="_blank">
-        Argon2 algorithm
-      </a>{' '}
-      to protect your credential against data leak.
-    </div>
-    {wsStatus.safeArea}
-  </>
-)
-
-function Field(
-  attrs: {
-    label: string
-    type?: string
-    name: string
-    oninput: string
-    msgId: string
-    autocomplete?: string
-  },
-  context: InputContext,
-) {
-  let value = context.values?.[attrs.name]
-  let validateResult = context.contextError?.[attrs.msgId]
-  return (
-    <div class="field">
-      <label>
-        {attrs.label}
-        <div>
           <input
-            type={attrs.type}
-            name={attrs.name}
-            oninput={attrs.oninput}
-            value={value}
-            autocomplete={attrs.autocomplete}
+            type="submit"
+            value={<Locale en="Register" zh_hk="註冊" zh_cn="注册" />}
+          />
+          <ClearInputContext />
+        </form>
+        <div class="hint-block">
+          <Locale
+            en="Your password is not be stored in plain text."
+            zh_hk="你的密碼不會被儲存為明文。"
+            zh_cn="你的密码不会被存储为明文。"
+          />
+          <br />
+          <Locale
+            en={
+              <>
+                Instead, it is processed with{' '}
+                <a href="https://en.wikipedia.org/wiki/Argon2" target="_blank">
+                  Argon2 algorithm
+                </a>{' '}
+                to protect your password against data leak.
+              </>
+            }
+            zh_hk={
+              <>
+                相反，它使用{' '}
+                <a href="https://zh.wikipedia.org/zh-hk/Argon2" target="_blank">
+                  Argon2 算法
+                </a>{' '}
+                來保護你的密碼免受數據洩漏。
+              </>
+            }
+            zh_cn={
+              <>
+                相反，它使用{' '}
+                <a href="https://zh.wikipedia.org/zh-cn/Argon2" target="_blank">
+                  Argon2 算法
+                </a>{' '}
+                来保护你的密码免受数据泄露。
+              </>
+            }
           />
         </div>
-      </label>
-      <div class="space"></div>
-      {renderErrorMessage(attrs.msgId, validateResult)}
+      </>
+    )}
+    <div class="separator-line flex-center">
+      <Locale
+        en="Already have an account?"
+        zh_hk="已經有帳號了嗎？"
+        zh_cn="已经有一个账号了吗？"
+      />
     </div>
-  )
-}
-
-function renderErrorMessage(id: string, result: ValidateResult | undefined) {
-  if (!result) {
-    return <div id={id} class="msg"></div>
-  }
-
-  return (
-    <div
-      id={id}
-      class="msg"
-      style={result.type == 'ok' ? 'color:green' : 'color:red'}
-    >
-      {result.text}
-      {result.extra && <span class="extra">{result.extra}</span>}
+    <div style="margin-bottom: 1rem">
+      <Link href="/login">
+        <Locale en="Login" zh_hk="登入" zh_cn="登录" />
+      </Link>
     </div>
-  )
-}
-
-function ClearInputContext(_attrs: {}, context: InputContext) {
-  context.contextError = undefined
-  context.values = undefined
-}
-
-type InputContext = Context & {
-  contextError?: ContextError
-  values?: Record<string, string | null>
-}
-type ContextError = Record<string, ValidateResult>
-
-type ValidateResult =
-  | { type: 'error'; text: string; extra?: string }
-  | {
-      type: 'found'
-      text: string
-      user: User
-      extra?: string
-    }
-  | { type: 'ok'; text: string; extra?: string }
-
-let minUsername = 1
-let maxUsername = 32
-
-function validateUsername(username: string): ValidateResult {
-  if (!username) {
-    return { type: 'error', text: 'username not provided' }
-  }
-
-  if (username.length < minUsername) {
-    let diff = minUsername - username.length
-    return {
-      type: 'error' as const,
-      text: `username "${username}" is too short, need ${diff} more characters`,
-    }
-  }
-
-  if (username.length > maxUsername) {
-    let diff = username.length - maxUsername
-    return {
-      type: 'error' as const,
-      text: `username "${username}" is too long, need ${diff} less characters`,
-    }
-  }
-
-  if (username.replace(/badminton/g, '').includes('admin')) {
-    return {
-      type: 'error' as const,
-      text: `username cannot contains "admin"`,
-    }
-  }
-
-  let excludedChars = Array.from(
-    new Set(username.replace(/[a-z0-9_]/g, '')),
-  ).join('')
-  if (excludedChars.length > 0) {
-    return {
-      type: 'error' as const,
-      text: `username cannot contains "${excludedChars}"`,
-      extra: `username should only consist of english letters [a-z] and digits [0-9], underscore [_] is also allowed`,
-    }
-  }
-
-  let user = find(proxy.user, { username })
-  if (user) {
-    return {
-      type: 'found' as const,
-      text: `username "${username}" is already used`,
-      user,
-    }
-  }
-
-  return {
-    type: 'ok' as const,
-    text: `username "${username}" is available`,
-  }
-}
+  </>
+)
 
 let minPassword = 6
 let maxPassword = 256
 
-function validatePassword(password: string): ValidateResult {
+function validatePassword(password: string): ValidateUserResult {
   if (!password) {
     return { type: 'error', text: 'password not provided' }
   }
@@ -353,8 +342,8 @@ function validatePassword(password: string): ValidateResult {
   return { type: 'ok' as const, text: 'password is acceptable' }
 }
 
-// email is optional
-function validateEmail(email: string | null): ValidateResult {
+function validateEmail(email: string | null): ValidateUserResult {
+  // email is optional
   if (!email) {
     return { type: 'ok', text: '' }
   }
@@ -370,7 +359,7 @@ function validateEmail(email: string | null): ValidateResult {
   if (user) {
     return {
       type: 'found' as const,
-      text: `email "${email}" is already used`,
+      text: `email "${email}" has already registered`,
       user,
     }
   }
@@ -378,10 +367,37 @@ function validateEmail(email: string | null): ValidateResult {
   return { type: 'ok', text: `email "${email}" is valid` }
 }
 
+function validateTel(tel: string | null): ValidateUserResult {
+  // tel is optional
+  if (!tel) {
+    return { type: 'ok', text: '' }
+  }
+
+  tel = to_full_hk_mobile_phone(tel)
+
+  if (!tel) {
+    return {
+      type: 'error',
+      text: 'invalid hk mobile phone number',
+    }
+  }
+
+  let user = find(proxy.user, { tel })
+  if (user) {
+    return {
+      type: 'found' as const,
+      text: `tel "${formatTel(tel)}" has already registered`,
+      user,
+    }
+  }
+
+  return { type: 'ok', text: `tel "${formatTel(tel)}" is valid` }
+}
+
 function validateConfirmPassword(input: {
   password: string
   confirm_password: string
-}): ValidateResult {
+}): ValidateUserResult {
   if (!input.password)
     return {
       type: 'error',
@@ -403,7 +419,7 @@ function validateInput(input: {
   field: string
   value: string | void
   selector: string
-  validate: (value: string) => ValidateResult
+  validate: (value: string) => ValidateUserResult
 }) {
   let { context, value, selector } = input
 
@@ -499,7 +515,20 @@ function CheckEmail(_: {}, context: WsContext) {
   })
 }
 
-async function submit(context: InputContext): Promise<Node> {
+function CheckTel(_: {}, context: WsContext) {
+  let tel = context.args?.[0] as string
+  validateInput({
+    context,
+    value: tel,
+    field: 'tel',
+    selector: '#telMsg',
+    validate: validateTel,
+  })
+}
+
+async function submit(
+  context: InputContext<ValidateUserResult>,
+): Promise<Node> {
   try {
     let body = getContextFormBody(context)
     let input = {
@@ -517,7 +546,7 @@ async function submit(context: InputContext): Promise<Node> {
     let errors = Object.entries(results)
     let hasError = errors.some(entry => entry[1].type != 'ok')
     if (hasError) {
-      context.contextError = Object.fromEntries<ValidateResult>(errors)
+      context.contextError = Object.fromEntries<ValidateUserResult>(errors)
       context.values = input
       return RegisterPage
     }
@@ -528,6 +557,7 @@ async function submit(context: InputContext): Promise<Node> {
       tel: null,
       avatar: null,
       is_admin: null,
+      nickname: null,
     })
 
     let main: Node
@@ -559,17 +589,42 @@ fetch('/login/submit',{
     } else {
       main = (
         <p>
-          You can now <a href="/login">login</a> to the system.
+          <Locale
+            en={
+              <>
+                You can now <a href="/login">login</a> to the system.
+              </>
+            }
+            zh_hk={
+              <>
+                你現在可以 <a href="/login">登入</a> 系統。
+              </>
+            }
+            zh_cn={
+              <>
+                你现在可以 <a href="/login">登录</a> 系统。
+              </>
+            }
+          />
         </p>
       )
     }
 
     return (
       <div>
-        <p>Register successfully.</p>
-        <p hidden>
-          TODO: A verification email has already been sent to your email
-          address. Please check your inbox and spam folder.
+        <p>
+          <Locale
+            en="Register successfully."
+            zh_hk="註冊成功。"
+            zh_cn="注册成功。"
+          />
+        </p>
+        <p>
+          <Locale
+            en="A verification email has already been sent to your email address. Please check your inbox and spam folder."
+            zh_hk="系統已經向你的電郵地址發送了驗證電郵。請檢查你的收件箱和垃圾郵件文件夾。"
+            zh_cn="系统已经向你的电子邮件地址发送了验证电子邮件。请检查你的收件箱和垃圾邮件文件夹。"
+          />
         </p>
         {main}
       </div>
@@ -586,9 +641,15 @@ fetch('/login/submit',{
 
 let routes = {
   '/register': {
-    title: title('Register'),
-    description: `Register to access exclusive content and functionality. Join our community on ${config.short_site_name}.`,
-    menuText: 'Register',
+    title: <Locale en="Register" zh_hk="註冊" zh_cn="注册" />,
+    description: (
+      <Locale
+        en={`Register to access exclusive content and functionality. Join our community on ${config.short_site_name}.`}
+        zh_hk={`註冊以獲取獨家內容及功能。加入我們的社區，${config.short_site_name}。`}
+        zh_cn={`注册以获取独家内容和功能。加入我们的社区，${config.short_site_name}。`}
+      />
+    ),
+    menuText: <Locale en="Register" zh_hk="註冊" zh_cn="注册" />,
     menuUrl: '/register',
     guestOnly: true,
     node: RegisterPage,
@@ -607,6 +668,11 @@ let routes = {
     title: apiEndpointTitle,
     description: 'validate email and check availability',
     node: <CheckEmail />,
+  },
+  '/register/check-tel': {
+    title: apiEndpointTitle,
+    description: 'validate phone number and check availability',
+    node: <CheckTel />,
   },
   '/register/submit': {
     async resolve(context): Promise<StaticPageRoute> {
